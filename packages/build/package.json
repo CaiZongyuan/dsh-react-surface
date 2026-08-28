@@ -1,0 +1,17 @@
+{
+  "name": "dsh-react-surface-build",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Bun build adapter for DSH React Surface packages",
+  "type": "module",
+  "bin": {
+    "dsh-react-surface-build": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src"
+  ]
+}

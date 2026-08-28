@@ -1,0 +1,31 @@
+{
+  "name": "dsh-react-surface-workspace",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "bun@1.4.0",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "bun run build:runtime && bun run build:example",
+    "build:runtime": "bunx --bun dsh-react-surface-build packages/runtime && bunx tsc -p packages/runtime/tsconfig.build.json",
+    "build:example": "bunx --bun dsh-react-surface-build examples/basic-surface && bunx tsc -p examples/basic-surface/tsconfig.build.json",
+    "typecheck": "bunx tsc --noEmit",
+    "test": "bun test",
+    "verify:artifacts": "bun scripts/verify-artifacts.ts",
+    "format": "bunx prettier --write .",
+    "format:check": "bunx prettier --check .",
+    "check": "bun run typecheck && bun run test && bun run build && bun run verify:artifacts && bun run format:check"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.1",
+    "dsh-react-surface-build": "workspace:*",
+    "prettier": "^3.8.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "typescript": "^6.0.2"
+  }
+}
