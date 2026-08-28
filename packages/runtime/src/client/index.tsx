@@ -10,11 +10,16 @@ import { SurfaceLauncher } from "./surface-launcher.tsx";
 
 export type {
   ReactSurfaceDefinition,
+  ReactSurfaceAgentController,
+  ReactSurfaceAgentRegistration,
+  ReactSurfaceAgentTool,
+  ReactSurfaceLayout,
   ReactSurfaceProps,
   ReactSurfaceRegistry,
   ReactSurfaceSnapshot,
   RegisteredReactSurface,
 } from "./contracts.ts";
+import { SurfaceAgentClientBridge } from "./surface-agent-client.ts";
 export {
   defineReactSurface,
   ReactSurfaceRegistryImpl,
@@ -31,6 +36,7 @@ export const inject = ["slots"];
 
 export function apply(ctx: ClientContext): void {
   const registry = new ReactSurfaceRegistryImpl();
+  const agentBridge = new SurfaceAgentClientBridge(ctx, registry);
   const SurfaceHostEntry = () => <ReactSurfaceHost registry={registry} />;
   const SurfaceLauncherEntry = ({ wide }: SidebarFooterActionOwnerProps) => (
     <SurfaceLauncher registry={registry} wide={wide} />
@@ -64,6 +70,7 @@ export function apply(ctx: ClientContext): void {
     return () => {
       disposeLauncher();
       disposeOverlay();
+      agentBridge.dispose();
       void disposeService();
     };
   }, "dsh-react-surface: runtime, overlay, and launcher");

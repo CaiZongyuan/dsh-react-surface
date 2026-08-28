@@ -1,6 +1,6 @@
 # dsh-react-surface
 
-`dsh-react-surface` is a DSH-native runtime for mounting independently packaged React applications as full-frame surfaces. Applications keep their own state while hidden, share the React runtime provided by DSH, and render inside isolated ShadowRoots.
+`dsh-react-surface` is a DSH-native runtime for mounting independently packaged React applications as full-frame or workspace surfaces. Applications keep their own state while hidden, share the React runtime provided by DSH, and render inside isolated ShadowRoots.
 
 This repository currently targets DeepSeek Harness `0.1.1-rc.2`. It is an experimental integration package, not a stable public release.
 
@@ -65,6 +65,7 @@ Restart DSH after changing the installed package graph. Rebuild and refresh the 
 An application adapter has a no-op Host entry, a DSH client manifest, and a Client entry that registers its React root:
 
 ```tsx
+import { useEffect } from "react";
 import type { ClientContext } from "@deepseek-ai/dsh-client-runtime/client";
 import {
   defineReactSurface,
@@ -72,11 +73,32 @@ import {
 } from "dsh-react-surface/client";
 
 function Application({
+  agent,
   close,
   location,
   navigate,
   portalRoot,
 }: ReactSurfaceProps) {
+  useEffect(
+    () =>
+      agent.register({
+        scopeKey: "document:current",
+        label: "Example Application",
+        tools: [
+          {
+            name: "example_get_context",
+            description: "Read the active application context.",
+            parameters: {
+              type: "object",
+              properties: {},
+              additionalProperties: false,
+            },
+            execute: () => JSON.stringify(readCurrentContext()),
+          },
+        ],
+      }),
+    [agent],
+  );
   return <YourApp />;
 }
 
@@ -85,6 +107,7 @@ const definition = defineReactSurface({
   title: "Example Application",
   component: Application,
   styles: "/* application CSS */",
+  layout: "workspace",
 });
 
 export const inject = ["reactSurfaces"];
@@ -94,7 +117,11 @@ export function apply(ctx: ClientContext) {
 }
 ```
 
+`layout` defaults to `"full-frame"`, which covers the complete DSH frame. Use `"workspace"` to keep the rendered DSH sidebar on the left, place the application in the center, and preserve the native conversation/details region on the right. Sidebar, details, and viewport changes are tracked automatically; narrow viewports fall back to full-frame mode.
+
 The adapter package must declare both `dsh.bundle.patch` and `dsh.client`. It must also list `dsh-react-surface/client` in `dsh.client.external`, so the DSH module graph supplies one shared runtime implementation.
+
+The optional `agent` registration is active only while both this Surface and a native DSH Session are current. The Host binds its Tool catalog through the always-on `dsh-ag-ui/browser-tools` Cordis row. Closing the Surface, changing Session, changing `scopeKey`, unloading either plugin, or losing the browser lease removes the Agent-scoped Tools. Application context is best exposed through a just-in-time read Tool instead of being copied into every prompt.
 
 Build an adapter package with:
 
@@ -109,11 +136,12 @@ The package convention is `src/index.ts` for the Host entry and `src/client/inde
 `ctx.reactSurfaces` deliberately exposes a small interface:
 
 - `register(definition)` ties an application to its plugin lifetime.
+- `ReactSurfaceProps.agent.register(...)` publishes replaceable context and browser-owned Tools for the current native Session.
 - `open(id, location?)` displays an application.
 - `close()` reveals the native DSH workspace.
 - `navigate(location)` updates the active application's retained location.
 - `getSnapshot()` and `subscribe()` support React and non-React consumers.
 
-The runtime owns DSH slot registration, ShadowRoot creation, application visibility, error isolation, and shared React usage. Application adapters own routing, providers, business state, and backend integration.
+The runtime owns DSH slot registration, ShadowRoot creation, application visibility, native Session leases, Tool transport, error isolation, and shared React usage. Application adapters own routing, providers, business state, capability declarations, and backend integration.
 
 See [Architecture](docs/architecture.md) for lifecycle and module details and [HIS Integration](docs/his-integration.md) for the next implementation stage.

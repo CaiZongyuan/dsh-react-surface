@@ -82,6 +82,62 @@ describe("ReactSurfaceRegistryImpl", () => {
 
     expect(notifications).toBe(4);
   });
+
+  test("publishes a replaceable Agent capability lease per surface", () => {
+    const registry = new ReactSurfaceRegistryImpl();
+    const disposeSurface = registry.register(surface("first"));
+    const first = {
+      scopeKey: "encounter:first",
+      label: "First encounter",
+      tools: [
+        {
+          name: "surface_context",
+          description: "Read the current context.",
+          parameters: { type: "object", properties: {} },
+          execute: () => "first",
+        },
+      ],
+    };
+    const second = { ...first, scopeKey: "encounter:second" };
+
+    const disposeFirst = registry.registerAgent("first", first);
+    expect(registry.getAgentRegistration("first")).toBe(first);
+    const disposeSecond = registry.registerAgent("first", second);
+    disposeFirst();
+    expect(registry.getAgentRegistration("first")).toBe(second);
+
+    disposeSecond();
+    expect(registry.getAgentRegistration("first")).toBeUndefined();
+    registry.registerAgent("first", first);
+    disposeSurface();
+    expect(registry.getAgentRegistration("first")).toBeUndefined();
+  });
+
+  test("rejects invalid Agent capability declarations", () => {
+    const registry = new ReactSurfaceRegistryImpl();
+    registry.register(surface("first"));
+    expect(() =>
+      registry.registerAgent("first", {
+        scopeKey: "invalid scope",
+        label: "Invalid",
+        tools: [],
+      }),
+    ).toThrow("scopeKey");
+    expect(() =>
+      registry.registerAgent("first", {
+        scopeKey: "valid",
+        label: "Valid",
+        tools: [
+          {
+            name: "bad.name",
+            description: "Invalid",
+            parameters: { type: "object" },
+            execute: () => "",
+          },
+        ],
+      }),
+    ).toThrow("tool name");
+  });
 });
 
 describe("defineReactSurface", () => {
@@ -90,13 +146,23 @@ describe("defineReactSurface", () => {
       id: "example.surface",
       title: "Example",
       component: TestSurface,
+      layout: "workspace",
     });
 
     expect(Object.isFrozen(definition)).toBe(true);
+    expect(definition.layout).toBe("workspace");
   });
 
-  test("rejects invalid identifiers and titles", () => {
+  test("rejects invalid identifiers, titles, and layouts", () => {
     expect(() => surface("Invalid ID")).toThrow("React surface id");
     expect(() => surface("valid", "   ")).toThrow("title must not be empty");
+    expect(() =>
+      defineReactSurface({
+        id: "valid",
+        title: "Valid",
+        component: TestSurface,
+        layout: "unknown" as never,
+      }),
+    ).toThrow("Unknown React surface layout");
   });
 });

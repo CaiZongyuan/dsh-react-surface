@@ -199,6 +199,7 @@ const definition = defineReactSurface({
   component: BasicSurface,
   styles,
   initialLocation: "/counter",
+  layout: "workspace",
 });
 
 export const inject = ["reactSurfaces"];

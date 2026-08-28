@@ -13,6 +13,7 @@ application plugin
 
 dsh-react-surface client plugin
   -> ctx.reactSurfaces
+  -> active Surface + current native Session lease
   -> shell.overlay
   -> sidebar.footer.action
   -> one ShadowRoot per application
@@ -21,6 +22,11 @@ DSH Web
   -> shared React 18.3.1
   -> Client Cordis lifecycle
   -> native workspace kept mounted underneath
+
+dsh-react-surface Host plugin
+  -> /react-surface-agent same-origin bridge
+  -> dsh-ag-ui/browser-tools
+  -> exact native DSH Agent scope
 ```
 
 The runtime has one public Interface, `ReactSurfaceRegistry`. Applications do not call `ctx.slots` and do not manipulate the DSH frame.
@@ -35,6 +41,10 @@ The runtime has one public Interface, `ReactSurfaceRegistry`. Applications do no
 6. Unloading the runtime removes its slot entries and service through the owning Cordis effect.
 
 Opening or closing a surface changes visibility, focus availability, and the inert state of the native DSH frame. It does not unmount either the React application or the DSH workspace. Each application retains its last location independently.
+
+An application may publish one `ReactSurfaceAgentRegistration` through its render-provided controller. Functions stay inside the browser registry; only bounded Tool descriptors cross the Host seam. The Client combines the active Surface with `sessions.list.current`, creates one replaceable lease, long-polls for Tool invocations, executes against the latest registration, and returns string results. The Host permits one active browser lease per native Session. A newer tab takes over; the displaced tab remains blocked for that exact Surface/Session/scope key until the user changes context, preventing multi-tab lease contention.
+
+A definition's optional `layout` controls its coverage. The default `full-frame` layout covers and disables the complete DSH frame. The `workspace` layout retains the official DSH frame and Slot tree: sidebar stays on the left, the application occupies the center, and the native conversation/details region is constrained to the right. Resize and panel transitions update the split through observers; when the application would fall below its minimum usable width, the runtime falls back to full-frame mode.
 
 ## Client Module Graph
 
@@ -66,7 +76,7 @@ The registry stores an opaque application-owned `location` string. It neither pa
 
 ## Host Responsibilities
 
-The current Host entry is intentionally empty because the example has no backend. A reverse proxy will be added when the first backend-owning application defines real requirements. That future module must use a fixed, validated upstream and a namespaced path; it must not become a general open proxy.
+The Host entry conditionally activates when `webServer`, `agents`, and the `browserTools` service are present. It validates bounded same-origin lease, poll, result, and release requests; resolves only an already-live native Agent; and delegates schema validation, Agent-scoped registration, timeout, cancellation, and teardown to `dsh-ag-ui/browser-tools`. It never creates or selects an Agent and does not authorize application resources. Application backend adapters may add fixed, namespaced reverse proxies separately; they must not become general open proxies.
 
 ## Compatibility
 
