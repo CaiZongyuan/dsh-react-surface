@@ -1,5 +1,7 @@
 # dsh-react-surface
 
+English | [简体中文](README.zh.md)
+
 `dsh-react-surface` is a DSH-native runtime for mounting independently packaged React applications as full-frame or workspace surfaces. Applications keep their own state while hidden, share the React runtime provided by DSH, and render inside isolated ShadowRoots.
 
 This repository currently targets DeepSeek Harness `0.1.1-rc.2`. It is an experimental integration package, not a stable public release.
