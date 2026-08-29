@@ -1,5 +1,12 @@
 export const SURFACE_AGENT_PATH = "/react-surface-agent";
 export const SURFACE_AGENT_MAX_BODY_BYTES = 256 * 1024;
+export const SURFACE_AGENT_LEASE_TTL_MS = 45_000;
+
+export interface SurfaceAgentCapabilities {
+  available: true;
+  protocolVersion: 1;
+  features: readonly ["capability-token", "lease-ttl", "session-scoped-tools"];
+}
 
 export interface SurfaceAgentToolDescriptor {
   name: string;
@@ -20,6 +27,13 @@ export interface SurfaceAgentLeaseRequest {
 export interface SurfaceAgentPollRequest {
   clientId: string;
   revision: number;
+  token: string;
+}
+
+export interface SurfaceAgentLeaseResponse {
+  active: true;
+  token: string;
+  ttlMs: number;
 }
 
 export interface SurfaceAgentInvocation {

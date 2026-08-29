@@ -2,114 +2,99 @@
 
 English | [简体中文](README.zh.md)
 
-`dsh-react-surface` is a DSH-native runtime for mounting independently packaged React applications as full-frame or workspace surfaces. Applications keep their own state while hidden, share the React runtime provided by DSH, and render inside isolated ShadowRoots.
+`dsh-react-surface` lets an existing client-side React application run as a native DeepSeek Harness surface. The application keeps its own UI and state, while the runtime owns DSH placement, lifecycle, style isolation, shell branding, responsive layouts, diagnostics, and optional Agent collaboration.
 
-This repository currently targets DeepSeek Harness `0.1.1-rc.2`. It is an experimental integration package, not a stable public release.
+The repository currently targets DeepSeek Harness `0.1.1-rc.2` and is installed from source. It is not an npm release yet.
+
+## What It Provides
+
+- One typed `defineReactSurface(...)` entry for Vite React applications and Next.js Client Components.
+- Isolated ShadowRoots with automatic CSS, CSS Module, image, and font bundling.
+- `full-frame`, `center`, `workspace`, `right-panel`, and `bottom-panel` layouts.
+- Accessible resize handles, responsive fallback, and versioned UI-only preferences.
+- Surface-only styling or temporary semantic branding of the visible DSH shell.
+- Lazy mount, keep-alive, and unmount-on-close lifecycle policies.
+- A local diagnostic report through `ctx.reactSurfaces.inspect()`.
+- Optional `dsh-ag-ui` browser Tools scoped to the active Surface and native DSH Session.
+
+The runtime does not load arbitrary HTML, remote applications, iframes, or Next.js server output. Installed Surface plugins are trusted code; ShadowRoot is style isolation, not a security sandbox.
 
 ## Architecture
 
 ```text
 DSH Web
-├─ dsh-react-surface
-│  ├─ shell.overlay -> ReactSurfaceHost
-│  ├─ sidebar.footer.action -> application launchers
-│  └─ ctx.reactSurfaces -> register/open/close/navigate
-└─ application adapter plugins
-   ├─ example.basic
-   ├─ ankang.his
-   └─ other React applications
+├─ dsh-react-surface runtime
+│  ├─ one small ctx.reactSurfaces interface
+│  ├─ DSH Host Adapter: layout, branding, cleanup, compatibility
+│  ├─ one ShadowRoot per mounted application
+│  └─ optional dsh-ag-ui Session Tool lease
+└─ application Adapter plugin
+   ├─ imports the existing React root
+   ├─ declares layouts, lifecycle, and brand tokens
+   └─ optionally registers browser-owned Tools
 ```
 
-The runtime does not load arbitrary Vite HTML output. Each application is compiled as a DSH Client plugin and registers one typed React surface.
+Application Adapters never query DSH DOM or call DSH Slot primitives. They register through the runtime interface and keep ownership of routing, providers, data, authorization, and business behavior.
 
-The repository has three deliberately separate roles:
+## Source Installation
 
-- `packages/runtime` is the DSH plugin and browser runtime.
-- `packages/build` is the reusable Bun build adapter that emits DSH lazy-CJS artifacts.
-- `examples/basic-surface` is an independent application plugin and the first consumer of both packages.
-
-## Requirements
-
-- Bun `1.4.0` or newer
-- Node.js `22.19.0` or newer
-- DeepSeek Harness `0.1.1-rc.2`
-- `pnpm` on `PATH` because `dsh plugin` delegates profile package management to pnpm
-
-## Develop
+Clone and verify the runtime:
 
 ```powershell
+git clone https://github.com/CaiZongyuan/dsh-react-surface.git
+cd dsh-react-surface
 bun install
 bun run check
 ```
 
-`bun run check` typechecks the workspace, runs the registry tests, builds both DSH packages, verifies the lazy-CJS artifacts, and checks formatting.
-
-## Install The Local PoC
-
-Build the packages first:
+Generate an Adapter inside an existing Vite or Next.js project:
 
 ```powershell
-bun run build
+bun packages/build/src/cli.ts init D:\Projects\my-react-app --framework vite
 ```
 
-Install the runtime and the independent example into the DSH Web profile:
+The command creates `integrations/dsh` without overwriting application files. It detects a conventional Vite `src/App.tsx`; use `--entry`, `--id`, `--title`, `--output`, or `--dry-run` when the defaults do not fit.
+
+Build and install the runtime and Adapter into the DSH Web profile:
 
 ```powershell
-dsh.cmd plugin --profile web add ./packages/runtime
-dsh.cmd plugin --profile web add ./examples/basic-surface
+cd D:\Projects\my-react-app\integrations\dsh
+bun install
+bun run build
+
+dsh.cmd plugin --profile web add D:\Projects\dsh-react-surface\packages\runtime
+dsh.cmd plugin --profile web add D:\Projects\my-react-app\integrations\dsh
 dsh.cmd web
 ```
 
-Restart DSH after changing the installed package graph. Rebuild and refresh the browser after changing Client code.
+Restart DSH after changing the installed package graph. Rebuild the Adapter and refresh the browser after changing Client code.
 
-## Register An Application
-
-An application adapter has a no-op Host entry, a DSH client manifest, and a Client entry that registers its React root:
+## Register A Surface
 
 ```tsx
-import { useEffect } from "react";
 import type { ClientContext } from "@deepseek-ai/dsh-client-runtime/client";
 import {
   defineReactSurface,
   type ReactSurfaceProps,
 } from "dsh-react-surface/client";
 
-function Application({
-  agent,
-  close,
-  location,
-  navigate,
-  portalRoot,
-}: ReactSurfaceProps) {
-  useEffect(
-    () =>
-      agent.register({
-        scopeKey: "document:current",
-        label: "Example Application",
-        tools: [
-          {
-            name: "example_get_context",
-            description: "Read the active application context.",
-            parameters: {
-              type: "object",
-              properties: {},
-              additionalProperties: false,
-            },
-            execute: () => JSON.stringify(readCurrentContext()),
-          },
-        ],
-      }),
-    [agent],
-  );
-  return <YourApp />;
+function Application({ close, layout, portalRoot }: ReactSurfaceProps) {
+  return <YourExistingApplication />;
 }
 
 const definition = defineReactSurface({
-  id: "example.application",
-  title: "Example Application",
+  id: "acme.dashboard",
+  title: "Acme Dashboard",
+  description: "Operations workspace",
   component: Application,
-  styles: "/* application CSS */",
-  layout: "workspace",
+  layout: {
+    default: "workspace",
+    supported: ["full-frame", "center", "workspace", "right-panel"],
+    fallback: "full-frame",
+    resizable: true,
+    persist: true,
+  },
+  lifecycle: { mount: "lazy", retention: "keep-alive" },
 });
 
 export const inject = ["reactSurfaces"];
@@ -119,31 +104,119 @@ export function apply(ctx: ClientContext) {
 }
 ```
 
-`layout` defaults to `"full-frame"`, which covers the complete DSH frame. Use `"workspace"` to keep the rendered DSH sidebar on the left, place the application in the center, and preserve the native conversation/details region on the right. Sidebar, details, and viewport changes are tracked automatically; narrow viewports fall back to full-frame mode.
+The package manifest must declare the same Surface id under `dsh.reactSurface.id`. The build adapter uses it to attach extracted CSS to the correct ShadowRoot.
 
-The adapter package must declare both `dsh.bundle.patch` and `dsh.client`. It must also list `dsh-react-surface/client` in `dsh.client.external`, so the DSH module graph supplies one shared runtime implementation.
+## Brand The Shell
 
-The optional `agent` registration is active only while both this Surface and a native DSH Session are current. The Host binds its Tool catalog through the always-on `dsh-ag-ui/browser-tools` Cordis row. Closing the Surface, changing Session, changing `scopeKey`, unloading either plugin, or losing the browser lease removes the Agent-scoped Tools. Application context is best exposed through a just-in-time read Tool instead of being copied into every prompt.
+An application can keep the stock DSH shell or coordinate it with the active product brand:
 
-Build an adapter package with:
-
-```powershell
-bunx dsh-react-surface-build .
+```ts
+branding: {
+  shell: "surface",
+  colorScheme: "light",
+  identity: { name: "Acme Dashboard", mark: "AD" },
+  tokens: {
+    accent: "#176b4d",
+    accentForeground: "#ffffff",
+    background: "#f6f8f7",
+    surface: "#ffffff",
+    elevated: "#e9efec",
+    foreground: "#202723",
+    mutedForeground: "#66736c",
+    border: "#d7dfdb",
+    fontFamily: "Inter, system-ui, sans-serif",
+    radius: "6px",
+  },
+}
 ```
 
-The package convention is `src/index.ts` for the Host entry and `src/client/index.tsx` for the Client entry. The builder emits `lib/index.js` and one wrapped `lib/client.js`; an application's own TypeScript configuration remains responsible for declaration files.
+The Host Adapter maps stable Surface tokens to the tested DSH semantic tokens only while that Surface is active. When official Sidebar brand slots exist, `identity` temporarily replaces their mark and name. Cleanup is ownership-aware, so unloading the Surface does not overwrite a newer community plugin change.
+
+## Optional Agent Collaboration
+
+`dsh-ag-ui` is optional. Without it, mounting, routing, layouts, and branding continue to work and `capabilities.agent.status` reports `unavailable`.
+
+When available, an application may register browser-owned Tools:
+
+```tsx
+useEffect(
+  () =>
+    agent.register({
+      scopeKey: "document:current",
+      label: "Current document",
+      tools: [
+        {
+          name: "document_read",
+          description: "Read the current document state.",
+          parameters: {
+            type: "object",
+            properties: {},
+            additionalProperties: false,
+          },
+          execute: () => JSON.stringify(readCurrentDocument()),
+        },
+      ],
+    }),
+  [agent],
+);
+```
+
+Tools exist only while the Surface and one native DSH Session are active. The bridge uses a loopback/live-pair trust fence, Web Locks for tab leadership, an unguessable capability token, and a Host TTL. Application authorization still belongs to the application backend.
+
+See the installable neutral example in [`examples/ag-ui-tools`](examples/ag-ui-tools).
+
+## Next.js
+
+Next.js support means Client Surface support. Reusable Client Components, providers, Hooks, and browser state can run in DSH. Server Components, Server Actions, middleware, and the Next server remain in the original Next deployment.
+
+The current DSH cohort provides React `18.3.1`. A Next application using React 19-only runtime features requires a compatible future DSH cohort even if its source compiles successfully.
+
+See [Next.js Client integration](docs/next-client.md).
 
 ## Runtime Interface
 
-`ctx.reactSurfaces` deliberately exposes a small interface:
+`ctx.reactSurfaces` deliberately stays small:
 
-- `register(definition)` ties an application to its plugin lifetime.
-- `ReactSurfaceProps.agent.register(...)` publishes replaceable context and browser-owned Tools for the current native Session.
-- `open(id, location?)` displays an application.
-- `close()` reveals the native DSH workspace.
-- `navigate(location)` updates the active application's retained location.
-- `getSnapshot()` and `subscribe()` support React and non-React consumers.
+- `register(definition)` binds an application to its plugin lifecycle.
+- `open(id, location?)`, `close()`, and `navigate(location)` control visibility and opaque application location.
+- `setLayout(id, layout)` selects one declared semantic layout.
+- `getSnapshot()` and `subscribe()` expose observable state.
+- `inspect()` returns local diagnostics without application routes, Tool inputs, or business data.
+- `version` and monotonic `features` support capability detection.
 
-The runtime owns DSH slot registration, ShadowRoot creation, application visibility, native Session leases, Tool transport, error isolation, and shared React usage. Application adapters own routing, providers, business state, capability declarations, and backend integration.
+## Documentation
 
-See [Architecture](docs/architecture.md) for lifecycle and module details and [HIS Integration](docs/his-integration.md) for the next implementation stage.
+- [Application integration](docs/application-integration.md)
+- [Layouts and branding](docs/layouts-and-branding.md)
+- [Next.js Client integration](docs/next-client.md)
+- [Optional dsh-ag-ui integration](docs/ag-ui.md)
+- [Architecture](docs/architecture.md)
+- [Security model](SECURITY.md)
+
+## Development
+
+Requirements:
+
+- Bun `1.4.0` or newer
+- Node.js `22.19.0` or newer
+- DeepSeek Harness `0.1.1-rc.2`
+- `pnpm` on `PATH`, used internally by `dsh plugin`
+
+Run the full local quality gate:
+
+```powershell
+bun install
+bun run check
+```
+
+Run the packaged real-DSH browser lane separately:
+
+```powershell
+bun run test:e2e
+$env:DSH_AG_UI_DIR = "D:\Projects\Frontend\dsh-ag-ui"
+bun run test:e2e
+```
+
+The first command verifies graceful operation without `dsh-ag-ui`; the second also packs and installs the explicitly selected AG-UI source checkout.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a change.

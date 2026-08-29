@@ -16,6 +16,15 @@ const packages = [
       "dsh-react-surface/client",
     ]),
   },
+  {
+    directory: "examples/ag-ui-tools",
+    id: "dsh-react-surface-example-ag-ui-tools",
+    allowedRequires: new Set([
+      "react",
+      "react/jsx-runtime",
+      "dsh-react-surface/client",
+    ]),
+  },
 ];
 
 for (const packageInfo of packages) {

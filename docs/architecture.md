@@ -1,83 +1,97 @@
 # Architecture
 
-## Objective
+## Product Boundary
 
-`dsh-react-surface` lets independently packaged React applications participate in the DSH Client plugin tree without importing DSH UI implementation details. It is a runtime and build interface, not an HTML, iframe, or arbitrary Vite-dist loader.
+`dsh-react-surface` is a product-neutral runtime and build interface for trusted, installed React applications. It is not another DSH workbench, a remote page loader, a business framework, or a replacement conversation UI.
+
+The runtime is intentionally a deep module: application Adapters learn one small Interface while layout compatibility, DOM ownership, lifecycle cleanup, style extraction, preference migration, and optional Agent transport stay behind it.
 
 ## Modules
 
 ```text
-application plugin
+application Adapter
   -> defineReactSurface(...)
   -> ctx.reactSurfaces.register(...)
 
-dsh-react-surface client plugin
-  -> ctx.reactSurfaces
-  -> active Surface + current native Session lease
-  -> shell.overlay
-  -> sidebar.footer.action
-  -> one ShadowRoot per application
+dsh-react-surface Client
+  -> ReactSurfaceRegistry
+  -> unified launcher
+  -> ReactSurfaceHost
+  -> DSH Host Adapter
+  -> one ShadowRoot per mounted Surface
 
-DSH Web
-  -> shared React 18.3.1
-  -> Client Cordis lifecycle
-  -> native workspace kept mounted underneath
-
-dsh-react-surface Host plugin
-  -> /react-surface-agent same-origin bridge
-  -> dsh-ag-ui/browser-tools
+dsh-react-surface Host
+  -> optional /react-surface-agent bridge
+  -> optional dsh-ag-ui/browser-tools
   -> exact native DSH Agent scope
+
+dsh-react-surface-build
+  -> host ESM artifact
+  -> one DSH lazy-CJS client artifact
+  -> extracted CSS and small assets embedded by Surface id
 ```
 
-The runtime has one public Interface, `ReactSurfaceRegistry`. Applications do not call `ctx.slots` and do not manipulate the DSH frame.
+## Public Interface
 
-## Registration Lifecycle
+`ReactSurfaceRegistry` is the external seam. It owns:
 
-1. DSH loads the runtime client bundle and provides `ctx.reactSurfaces`.
-2. An application plugin waits on the `reactSurfaces` Cordis service.
-3. The application calls `register(definition)` inside its plugin effect.
-4. The runtime renders the application in its own ShadowRoot and adds a sidebar launcher.
-5. Unloading the application plugin calls the registration disposer and removes only that application.
-6. Unloading the runtime removes its slot entries and service through the owning Cordis effect.
+- registration and plugin-lifetime disposal;
+- one active Surface and retained opaque locations;
+- user-selected semantic layout;
+- lazy/eager mounting and hidden retention;
+- optional Agent registrations whose functions never cross the Host seam;
+- runtime metadata, capability detection, and local diagnostics.
 
-Opening or closing a surface changes visibility, focus availability, and the inert state of the native DSH frame. It does not unmount either the React application or the DSH workspace. Each application retains its last location independently.
+Application Adapters do not receive the Host Adapter, preference store, effect ledger, DSH elements, selectors, or transport details.
 
-An application may publish one `ReactSurfaceAgentRegistration` through its render-provided controller. Functions stay inside the browser registry; only bounded Tool descriptors cross the Host seam. The Client combines the active Surface with `sessions.list.current`, creates one replaceable lease, long-polls for Tool invocations, executes against the latest registration, and returns string results. The Host permits one active browser lease per native Session. A newer tab takes over; the displaced tab remains blocked for that exact Surface/Session/scope key until the user changes context, preventing multi-tab lease contention.
+## Shell Coordination
 
-A definition's optional `layout` controls its coverage. The default `full-frame` layout covers and disables the complete DSH frame. The `workspace` layout retains the official DSH frame and Slot tree: sidebar stays on the left, the application occupies the center, and the native conversation/details region is constrained to the right. Resize and panel transitions update the split through observers; when the application would fall below its minimum usable width, the runtime falls back to full-frame mode.
+The Client mounts through official `shell.overlay` and `sidebar.footer.action` Slots. Split layouts require geometry from the DSH frame. The Host Adapter resolves official semantic pane attributes first, then the tested rc.2 frame structure as a centralized fallback.
 
-## Client Module Graph
+The pure layout engine receives only geometry, semantic layout, constraints, and retained UI sizes. It produces Surface bounds, native pane sizing, resize metadata, and an explicit fallback reason. Unknown or unusable geometry falls back to full-frame rather than mutating an unrecognized shell.
 
-Every application bundle declares:
+One activation-scoped effect ledger owns:
 
-```jsonc
-{
-  "dsh": {
-    "client": {
-      "platform": "web",
-      "inject": ["dsh-react-surface"],
-      "external": ["dsh-react-surface/client"],
-    },
-  },
-}
-```
+- DSH attributes and inline semantic token overrides;
+- native pane width, height, borders, `inert`, and `aria-hidden`;
+- ResizeObserver and MutationObserver instances;
+- preference subscriptions and scheduled animation frames.
 
-The build adapter keeps React, ReactDOM, Cordis, the DSH slot/primitives modules, and declared DSH externals out of application bundles. DSH supplies those modules from its browser module table. The build fails when an application emits dynamic chunks or assets instead of one self-contained Client entry. Artifact verification also rejects ESM imports, unsupported `require()` calls, and bundled React copies.
+Cleanup runs newest-first, is idempotent, and continues after one cleanup failure. DOM values are restored only while the Runtime still owns the value, so a later community plugin update is not overwritten.
 
-## Style And Portal Isolation
+## Layouts
 
-Each application receives a dedicated open ShadowRoot. Its `styles` text is installed inside that root, and the application receives the same root as `portalRoot`. UI libraries with portals must direct dialogs, menus, tooltips, toasts, and other floating layers to this target.
+- `full-frame` covers and disables the DSH frame.
+- `center` preserves the DSH Sidebar and uses the remaining frame.
+- `workspace` places the application between the Sidebar and native conversation/details panes.
+- `right-panel` preserves the native DSH workspace and places the application before Details.
+- `bottom-panel` places the application below the native workspace.
 
-The runtime applies only minimal host styles and does not project application tokens onto `html`, `body`, or the DSH theme. Applications remain responsible for ensuring their CSS is valid inside a ShadowRoot.
+Only one React Surface is active. Flexible layout means coordination with semantic DSH regions, not a multi-application canvas.
 
-## Routing
+## Style And Brand Isolation
 
-The registry stores an opaque application-owned `location` string. It neither parses paths nor owns a router. A TanStack Router adapter should use memory history and translate `ReactSurfaceProps.location` into its initial or current route. Browser history remains available to an application's standalone adapter.
+Each mounted application has one open ShadowRoot. The build adapter extracts imported CSS and CSS Modules, structurally inlines local CSS assets through PostCSS, and embeds the result under `dsh.reactSurface.id`. At registration, the Runtime combines that CSS with explicit `definition.styles` inside the matching ShadowRoot.
 
-## Host Responsibilities
+Stable `--dsh-surface-*` variables are always available. `branding.shell: "surface"` temporarily maps the active Surface values onto tested DSH semantic aliases on the frame; `"preserve"` keeps the product brand inside the ShadowRoot. Optional product identity uses only official `sidebar.brand.mark` and `sidebar.brand.name` slots and stays unchanged when those slots are unavailable.
 
-The Host entry conditionally activates when `webServer`, `agents`, and the `browserTools` service are present. It validates bounded same-origin lease, poll, result, and release requests; resolves only an already-live native Agent; and delegates schema validation, Agent-scoped registration, timeout, cancellation, and teardown to `dsh-ag-ui/browser-tools`. It never creates or selects an Agent and does not authorize application resources. Application backend adapters may add fixed, namespaced reverse proxies separately; they must not become general open proxies.
+## Optional Agent Collaboration
+
+The Host Agent bridge exists only when `webServer`, `agents`, and `dsh-ag-ui`'s `browserTools` service are available. The Client probes capabilities and reports `unavailable` without affecting the Surface when that service is absent.
+
+When active:
+
+1. The Client combines the active Surface, current native Session, and current `scopeKey`.
+2. Web Locks elect one browser-tab leader for that identity.
+3. The Host verifies loopback or live-pair trust and resolves an already-live native Agent.
+4. The Host issues an unguessable capability token and a 45-second renewable lease.
+5. Tool invocations are long-polled to the browser and executed against the latest registration.
+6. Closing the Surface, changing Session/scope, unloading either plugin, losing leadership, or missing the TTL releases Tools.
+
+DSH pairing authorizes entry to this bridge, not application data. Every application backend remains responsible for user identity, resource authorization, validation, and durable effects.
 
 ## Compatibility
 
-The current package pins its DSH development dependencies to `0.1.1-rc.2` and relies on the React `18.3.1` platform modules shipped by that release. DSH Client package, slot, or build-format upgrades require a deliberate compatibility change and a real browser test.
+The current tested cohort is DSH `0.1.1-rc.2` with React `18.3.1`. Runtime `version`, `interfaceVersion`, and monotonic `features` let Adapters detect capability rather than guess from package versions.
+
+Any future DSH cohort change requires unit tests, packaged artifact checks, and a real browser mount before its compatibility claim is updated.

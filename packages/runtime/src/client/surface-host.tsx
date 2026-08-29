@@ -6,23 +6,47 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { ErrorInfo, ReactNode } from "react";
+import type {
+  ErrorInfo,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 
-import type {
-  ReactSurfaceDefinition,
-  ReactSurfaceRegistry,
+import {
+  getReactSurfaceLayoutConfiguration,
+  type ReactSurfaceDefinition,
 } from "./contracts.ts";
-import { resolveWorkspaceLayout } from "./workspace-layout.ts";
+import {
+  activateDshShell,
+  type DshShellActivation,
+} from "./dsh-host-adapter.ts";
+import type {
+  ReactSurfaceLayoutResolution,
+  ReactSurfaceResizeDescriptor,
+} from "./layout-engine.ts";
+import type { ReactSurfaceRegistryImpl } from "./registry.ts";
 
 const BASE_SURFACE_STYLES = `
 :host {
   all: initial;
   color-scheme: light dark;
   contain: strict;
+  container-name: dsh-react-surface;
+  container-type: inline-size;
   display: block;
   height: 100%;
   width: 100%;
+  --dsh-surface-background: var(--dsw-alias-bg-base, #f7f8fa);
+  --dsh-surface-surface: var(--dsw-alias-bg-layer-1, #ffffff);
+  --dsh-surface-elevated: var(--dsw-alias-bg-layer-2, #f2f3f5);
+  --dsh-surface-foreground: var(--dsw-alias-label-primary, #252730);
+  --dsh-surface-muted-foreground: var(--dsw-alias-label-secondary, #6b7280);
+  --dsh-surface-border: var(--dsw-alias-border-l2, #dfe3e8);
+  --dsh-surface-accent: var(--dsw-alias-brand-primary, #2367d1);
+  --dsh-surface-accent-foreground: var(--dsw-alias-brand-primary-invert, #fff);
+  --dsh-surface-font-family: var(--dsw-font-family, Inter, ui-sans-serif, system-ui, sans-serif);
+  --dsh-surface-radius: 6px;
 }
 :host([hidden]) {
   display: none;
@@ -31,69 +55,34 @@ const BASE_SURFACE_STYLES = `
   box-sizing: border-box;
 }
 #dsh-react-surface-root {
+  background: var(--dsh-surface-background);
+  color: var(--dsh-surface-foreground);
+  container-name: dsh-react-surface-content;
+  container-type: inline-size;
+  font-family: var(--dsh-surface-font-family);
   height: 100%;
   width: 100%;
 }
 `;
 
 interface ReactSurfaceHostProps {
-  registry: ReactSurfaceRegistry;
+  registry: ReactSurfaceRegistryImpl;
 }
 
-interface ShellFrameElements {
-  frame: HTMLElement;
-  overlay: HTMLElement;
-  sidebar: HTMLElement;
-  conversation: HTMLElement;
-  details: HTMLElement | null;
-}
-
-interface WorkspaceBounds {
-  left: number;
-  right: number;
-}
-
-function getShellFrameElements(
-  layer: HTMLDivElement | null,
-): ShellFrameElements | null {
-  const overlay = layer?.closest("[data-shell-overlay]");
-  const frame = overlay?.parentElement;
-  const sidebar = frame?.firstElementChild;
-  const frameChildren = frame
-    ? Array.from(frame.children).filter(
-        (element): element is HTMLElement => element instanceof HTMLElement,
-      )
-    : [];
-  const conversationPane = frame?.querySelector('[data-pane="conversation"]');
-  let conversation =
-    conversationPane instanceof HTMLElement
-      ? directFrameChild(conversationPane, frame ?? null)
-      : null;
-  conversation ??= frameChildren[1] ?? null;
-  const details = frameChildren[2] ?? null;
-  if (
-    !(overlay instanceof HTMLElement) ||
-    !(frame instanceof HTMLElement) ||
-    !(sidebar instanceof HTMLElement) ||
-    !(conversation instanceof HTMLElement) ||
-    sidebar === overlay
-  ) {
-    return null;
-  }
-  return { frame, overlay, sidebar, conversation, details };
-}
-
-function directFrameChild(element: HTMLElement, frame: Element | null) {
-  let current: HTMLElement | null = element;
-  while (current && current.parentElement !== frame)
-    current = current.parentElement;
-  return current;
+interface DragState {
+  pointerId: number;
+  startCoordinate: number;
+  startValue: number;
+  currentValue: number;
+  resize: ReactSurfaceResizeDescriptor;
 }
 
 export function ReactSurfaceHost({ registry }: ReactSurfaceHostProps) {
   const layerRef = useRef<HTMLDivElement>(null);
-  const [workspaceBounds, setWorkspaceBounds] =
-    useState<WorkspaceBounds | null>(null);
+  const activationRef = useRef<DshShellActivation | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+  const [resolution, setResolution] =
+    useState<ReactSurfaceLayoutResolution | null>(null);
   const snapshot = useSyncExternalStore(
     registry.subscribe,
     registry.getSnapshot,
@@ -102,165 +91,213 @@ export function ReactSurfaceHost({ registry }: ReactSurfaceHostProps) {
   const activeSurface = snapshot.surfaces.find(
     ({ definition }) => definition.id === snapshot.activeId,
   );
-  const wantsWorkspace = activeSurface?.definition.layout === "workspace";
-  const workspaceActive = wantsWorkspace && workspaceBounds !== null;
+  const activeId = activeSurface?.definition.id ?? null;
+  const activeLayout = activeSurface?.layout ?? null;
+  const activeDefinition = activeSurface?.definition;
 
   useEffect(() => {
-    if (snapshot.activeId === null) return;
+    if (activeId === null) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !event.defaultPrevented) registry.close();
+      if (
+        event.key === "Escape" &&
+        !event.defaultPrevented &&
+        document.querySelector("[data-dsh-react-surface-menu-backdrop]") ===
+          null
+      ) {
+        registry.close();
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [registry, snapshot.activeId]);
+  }, [activeId, registry]);
 
   useLayoutEffect(() => {
-    if (!wantsWorkspace) {
-      setWorkspaceBounds(null);
+    const layer = layerRef.current;
+    if (!layer || !activeDefinition || !activeLayout) {
+      activationRef.current = null;
+      registry.setShellDiagnostics({
+        compatible: true,
+        requestedLayout: null,
+        resolvedLayout: null,
+      });
       return;
     }
-
-    const elements = getShellFrameElements(layerRef.current);
-    if (!elements) return;
-    const { frame, overlay, sidebar, conversation, details } = elements;
-    const previousConversationStyle = conversation.getAttribute("style");
-    const previousFrameLayout = frame.getAttribute("data-react-surface-layout");
-
-    const restoreFrame = () => {
-      if (previousConversationStyle === null)
-        conversation.removeAttribute("style");
-      else conversation.setAttribute("style", previousConversationStyle);
-      if (previousFrameLayout === null)
-        frame.removeAttribute("data-react-surface-layout");
-      else frame.setAttribute("data-react-surface-layout", previousFrameLayout);
-    };
-
-    const updateLayout = () => {
-      const frameRect = frame.getBoundingClientRect();
-      const overlayRect = overlay.getBoundingClientRect();
-      const sidebarRect = sidebar.getBoundingClientRect();
-      const detailsWidth = details?.getBoundingClientRect().width ?? 0;
-      const columns = resolveWorkspaceLayout({
-        frameWidth: frameRect.width - detailsWidth,
-        sidebarWidth: sidebarRect.width,
-      });
-
-      if (!columns) {
-        restoreFrame();
-        setWorkspaceBounds(null);
-        return;
-      }
-
-      conversation.style.width = `${columns.conversationWidth}px`;
-      conversation.style.minWidth = "0";
-      conversation.style.justifySelf = "end";
-      conversation.style.borderLeft =
-        "1px solid var(--dsw-alias-border-l1, rgba(255,255,255,.08))";
-      frame.setAttribute("data-react-surface-layout", "workspace");
-
-      const conversationRect = conversation.getBoundingClientRect();
-      const nextBounds = {
-        left: Math.max(0, sidebarRect.right - overlayRect.left),
-        right: Math.max(0, overlayRect.right - conversationRect.left),
-      };
-      setWorkspaceBounds((current) =>
-        current?.left === nextBounds.left && current.right === nextBounds.right
-          ? current
-          : nextBounds,
-      );
-    };
-
-    updateLayout();
-    const observer = new ResizeObserver(updateLayout);
-    const mutationObserver = new MutationObserver(updateLayout);
-    observer.observe(frame);
-    observer.observe(overlay);
-    observer.observe(sidebar);
-    if (details) observer.observe(details);
-    mutationObserver.observe(frame, {
-      attributes: true,
-      attributeFilter: ["style"],
+    const activation = activateDshShell({
+      surfaceId: activeDefinition.id,
+      layer,
+      requestedLayout: activeLayout,
+      configuration: getReactSurfaceLayoutConfiguration(activeDefinition),
+      ...(activeDefinition.branding === undefined
+        ? {}
+        : { branding: activeDefinition.branding }),
+      preferences: registry.preferences,
+      onResolution: (next) => {
+        setResolution((current) =>
+          sameResolution(current, next) ? current : next,
+        );
+        registry.setShellDiagnostics({
+          compatible: !next.reason?.startsWith("DSH shell elements"),
+          requestedLayout: next.requested,
+          resolvedLayout: next.resolved,
+          ...(next.reason === undefined ? {} : { reason: next.reason }),
+        });
+      },
     });
+    activationRef.current = activation;
     return () => {
-      observer.disconnect();
-      mutationObserver.disconnect();
-      restoreFrame();
-      setWorkspaceBounds(null);
+      dragRef.current = null;
+      activationRef.current = null;
+      activation.dispose();
     };
-  }, [wantsWorkspace]);
+  }, [activeDefinition, activeLayout, registry]);
 
-  useEffect(() => {
-    if (snapshot.activeId === null) return;
-    const elements = getShellFrameElements(layerRef.current);
-    if (!elements) return;
-    const { frame, overlay } = elements;
-
-    const siblings = Array.from(frame.children).filter(
-      (element): element is HTMLElement =>
-        element instanceof HTMLElement &&
-        element !== overlay &&
-        !workspaceActive,
-    );
-    const previous = siblings.map((element) => ({
-      element,
-      inert: element.inert,
-      ariaHidden: element.getAttribute("aria-hidden"),
-    }));
-
-    for (const element of siblings) {
-      element.inert = true;
-      element.setAttribute("aria-hidden", "true");
-    }
-
-    return () => {
-      for (const state of previous) {
-        state.element.inert = state.inert;
-        if (state.ariaHidden === null)
-          state.element.removeAttribute("aria-hidden");
-        else state.element.setAttribute("aria-hidden", state.ariaHidden);
-      }
-    };
-  }, [snapshot.activeId, workspaceActive]);
+  const resize = activeId === null ? undefined : resolution?.resize;
 
   return (
     <div
       ref={layerRef}
       data-dsh-react-surface-layer=""
-      data-surface-layout={workspaceActive ? "workspace" : "full-frame"}
-      aria-hidden={snapshot.activeId === null}
+      aria-hidden={activeId === null}
       style={{
         position: "absolute",
-        top: 0,
-        right: workspaceActive ? workspaceBounds.right : 0,
-        bottom: 0,
-        left: workspaceActive ? workspaceBounds.left : 0,
         overflow: "hidden",
-        pointerEvents: snapshot.activeId === null ? "none" : "auto",
+        pointerEvents: activeId === null ? "none" : "auto",
       }}
     >
-      {snapshot.surfaces.map(({ definition, location }) => (
-        <ShadowSurface
-          key={definition.id}
-          definition={definition}
-          location={location}
-          active={snapshot.activeId === definition.id}
-          registry={registry}
+      {snapshot.surfaces
+        .filter(({ mounted }) => mounted)
+        .map(({ definition, layout, location }) => (
+          <ShadowSurface
+            key={definition.id}
+            definition={definition}
+            location={location}
+            layout={layout}
+            active={activeId === definition.id}
+            registry={registry}
+          />
+        ))}
+      {resize ? (
+        <SurfaceResizeHandle
+          resize={resize}
+          dragRef={dragRef}
+          onResize={(key, value) =>
+            activationRef.current?.setPanelSize(key, value)
+          }
+          onCommit={(key, value) =>
+            activationRef.current?.setPanelSize(key, value, true)
+          }
         />
-      ))}
+      ) : null}
     </div>
+  );
+}
+
+interface SurfaceResizeHandleProps {
+  resize: ReactSurfaceResizeDescriptor;
+  dragRef: React.MutableRefObject<DragState | null>;
+  onResize(key: ReactSurfaceResizeDescriptor["key"], value: number): void;
+  onCommit(key: ReactSurfaceResizeDescriptor["key"], value: number): void;
+}
+
+function SurfaceResizeHandle({
+  resize,
+  dragRef,
+  onResize,
+  onCommit,
+}: SurfaceResizeHandleProps) {
+  const vertical = resize.orientation === "vertical";
+  const edgeStyle =
+    resize.edge === "left"
+      ? { left: -4, top: 0, bottom: 0, width: 8 }
+      : resize.edge === "right"
+        ? { right: -4, top: 0, bottom: 0, width: 8 }
+        : { top: -4, right: 0, left: 0, height: 8 };
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startCoordinate: vertical ? event.clientX : event.clientY,
+      startValue: resize.value,
+      currentValue: resize.value,
+      resize,
+    };
+  };
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const coordinate = vertical ? event.clientX : event.clientY;
+    const value = clamp(
+      drag.startValue - (coordinate - drag.startCoordinate),
+      drag.resize.min,
+      drag.resize.max,
+    );
+    drag.currentValue = value;
+    onResize(drag.resize.key, value);
+  };
+  const handlePointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    const drag = dragRef.current;
+    onCommit(drag.resize.key, drag.currentValue);
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const increase = vertical
+      ? event.key === "ArrowLeft"
+      : event.key === "ArrowUp";
+    const decrease = vertical
+      ? event.key === "ArrowRight"
+      : event.key === "ArrowDown";
+    if (!increase && !decrease) return;
+    event.preventDefault();
+    onCommit(
+      resize.key,
+      clamp(resize.value + (increase ? 16 : -16), resize.min, resize.max),
+    );
+  };
+
+  return (
+    <div
+      role="separator"
+      tabIndex={0}
+      aria-label="Resize React Surface layout"
+      aria-orientation={vertical ? "vertical" : "horizontal"}
+      aria-valuemin={resize.min}
+      aria-valuemax={resize.max}
+      aria-valuenow={resize.value}
+      data-dsh-react-surface-resize={resize.edge}
+      onKeyDown={handleKeyDown}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
+      style={{
+        ...edgeStyle,
+        cursor: vertical ? "col-resize" : "row-resize",
+        outline: "none",
+        position: "absolute",
+        touchAction: "none",
+        zIndex: 2,
+      }}
+    />
   );
 }
 
 interface ShadowSurfaceProps {
   definition: Readonly<ReactSurfaceDefinition>;
   location: string;
+  layout: import("./contracts.ts").ReactSurfaceLayout;
   active: boolean;
-  registry: ReactSurfaceRegistry;
+  registry: ReactSurfaceRegistryImpl;
 }
 
 function ShadowSurface({
   definition,
   location,
+  layout,
   active,
   registry,
 }: ShadowSurfaceProps) {
@@ -291,6 +328,7 @@ function ShadowSurface({
     <div
       ref={hostRef}
       data-surface-id={definition.id}
+      data-surface-layout={layout}
       hidden={!active}
       style={{ position: "absolute", inset: 0 }}
     >
@@ -303,6 +341,8 @@ function ShadowSurface({
                   <Surface
                     active={active}
                     agent={agent}
+                    capabilities={registry.getSnapshot().runtime.capabilities}
+                    layout={layout}
                     location={location}
                     portalRoot={portalRoot}
                     close={() => registry.close()}
@@ -346,9 +386,48 @@ class SurfaceErrorBoundary extends Component<
   override render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div role="alert" style={{ padding: 24, fontFamily: "system-ui" }}>
+      <div
+        role="alert"
+        style={{
+          alignContent: "center",
+          background: "var(--dsh-surface-background)",
+          color: "var(--dsh-surface-foreground)",
+          display: "grid",
+          gap: 12,
+          height: "100%",
+          justifyItems: "center",
+          padding: 24,
+        }}
+      >
         <strong>{this.props.title} could not be rendered.</strong>
+        <button
+          type="button"
+          onClick={() => this.setState({ error: null })}
+          style={{
+            background: "var(--dsh-surface-accent)",
+            border: 0,
+            borderRadius: "var(--dsh-surface-radius)",
+            color: "var(--dsh-surface-accent-foreground)",
+            cursor: "pointer",
+            font: "inherit",
+            minHeight: 34,
+            padding: "0 14px",
+          }}
+        >
+          Retry
+        </button>
       </div>
     );
   }
+}
+
+function sameResolution(
+  left: ReactSurfaceLayoutResolution | null,
+  right: ReactSurfaceLayoutResolution,
+): boolean {
+  return left !== null && JSON.stringify(left) === JSON.stringify(right);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, Math.round(value)));
 }

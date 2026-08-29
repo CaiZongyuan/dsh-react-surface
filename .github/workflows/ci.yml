@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Typecheck, test, build, and verify artifacts
+        run: bun run check
+
+  dsh-package-consumer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DSH_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.17.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Install pinned DSH CLI
+        run: npm install -g @deepseek-ai/dsh@0.1.1-rc.2
+      - name: Build source-installed packages
+        run: bun run build
+      - name: Verify packaged Client contracts
+        run: bun run verify:artifacts
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+      - name: Mount packages in real DSH
+        run: bun run test:e2e
+      - name: Upload browser artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-react-surface-browser-artifacts
+          path: test-results/
+          if-no-files-found: ignore

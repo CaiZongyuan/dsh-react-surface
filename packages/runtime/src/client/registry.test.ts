@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { ReactSurfaceProps } from "./contracts.ts";
 import { defineReactSurface } from "./contracts.ts";
 import { ReactSurfaceRegistryImpl } from "./registry.ts";
+import { ReactSurfacePreferenceStore } from "./surface-preferences.ts";
 
 function TestSurface(_props: ReactSurfaceProps) {
   return null;
@@ -55,7 +56,10 @@ describe("ReactSurfaceRegistryImpl", () => {
     dispose();
     dispose();
 
-    expect(registry.getSnapshot()).toEqual({ activeId: null, surfaces: [] });
+    expect(registry.getSnapshot()).toMatchObject({
+      activeId: null,
+      surfaces: [],
+    });
   });
 
   test("rejects duplicate and unknown surfaces", () => {
@@ -87,8 +91,8 @@ describe("ReactSurfaceRegistryImpl", () => {
     const registry = new ReactSurfaceRegistryImpl();
     const disposeSurface = registry.register(surface("first"));
     const first = {
-      scopeKey: "encounter:first",
-      label: "First encounter",
+      scopeKey: "document:first",
+      label: "First document",
       tools: [
         {
           name: "surface_context",
@@ -98,7 +102,7 @@ describe("ReactSurfaceRegistryImpl", () => {
         },
       ],
     };
-    const second = { ...first, scopeKey: "encounter:second" };
+    const second = { ...first, scopeKey: "document:second" };
 
     const disposeFirst = registry.registerAgent("first", first);
     expect(registry.getAgentRegistration("first")).toBe(first);
@@ -164,5 +168,125 @@ describe("defineReactSurface", () => {
         layout: "unknown" as never,
       }),
     ).toThrow("Unknown React surface layout");
+  });
+
+  test("supports flexible layout declarations and validates their constraints", () => {
+    const definition = defineReactSurface({
+      id: "flexible",
+      title: "Flexible",
+      component: TestSurface,
+      layout: {
+        default: "workspace",
+        supported: ["workspace", "right-panel", "full-frame"],
+        conversation: { min: 320, initial: 400, max: 520 },
+      },
+    });
+
+    expect(definition.layout).toMatchObject({ default: "workspace" });
+    expect(() =>
+      defineReactSurface({
+        id: "invalid",
+        title: "Invalid",
+        component: TestSurface,
+        layout: {
+          default: "workspace",
+          supported: ["full-frame"],
+        },
+      }),
+    ).toThrow("must include default");
+  });
+
+  test("validates optional shell brand identity", () => {
+    expect(
+      defineReactSurface({
+        id: "branded",
+        title: "Branded",
+        component: TestSurface,
+        branding: {
+          shell: "surface",
+          identity: { name: "Acme", mark: "AC" },
+        },
+      }).branding?.identity,
+    ).toEqual({ name: "Acme", mark: "AC" });
+    expect(() =>
+      defineReactSurface({
+        id: "invalid-brand",
+        title: "Invalid",
+        component: TestSurface,
+        branding: { identity: { name: "Acme", mark: "TOO-LONG" } },
+      }),
+    ).toThrow("identity mark");
+  });
+});
+
+describe("Surface lifecycle and preferences", () => {
+  test("mounts lazily and retains state by default", () => {
+    const registry = new ReactSurfaceRegistryImpl();
+    registry.register(surface("first"));
+
+    expect(registry.getSnapshot().surfaces[0]?.mounted).toBe(false);
+    registry.open("first");
+    expect(registry.getSnapshot().surfaces[0]?.mounted).toBe(true);
+    registry.close();
+    expect(registry.getSnapshot().surfaces[0]?.mounted).toBe(true);
+  });
+
+  test("supports eager and unmount-on-close policies", () => {
+    const registry = new ReactSurfaceRegistryImpl();
+    registry.register({
+      ...surface("first"),
+      lifecycle: { mount: "eager", retention: "unmount-on-close" },
+    });
+
+    expect(registry.getSnapshot().surfaces[0]?.mounted).toBe(true);
+    registry.open("first");
+    registry.close();
+    expect(registry.getSnapshot().surfaces[0]?.mounted).toBe(false);
+  });
+
+  test("retains an allowed user layout and resets it safely", () => {
+    const preferences = new ReactSurfacePreferenceStore();
+    const registry = new ReactSurfaceRegistryImpl(preferences);
+    registry.register({
+      ...surface("first"),
+      layout: {
+        default: "workspace",
+        supported: ["workspace", "right-panel"],
+      },
+    });
+
+    registry.setLayout("first", "right-panel");
+    expect(registry.getSnapshot().surfaces[0]?.layout).toBe("right-panel");
+    expect(preferences.get("first").layout).toBe("right-panel");
+    expect(() => registry.setLayout("first", "bottom-panel")).toThrow(
+      "does not support",
+    );
+
+    registry.resetPreferences("first");
+    expect(registry.getSnapshot().surfaces[0]?.layout).toBe("workspace");
+  });
+
+  test("diagnostics omit locations and Tool payloads", () => {
+    const registry = new ReactSurfaceRegistryImpl();
+    registry.register(surface("first"));
+    registry.open("first", "/private/document/123");
+    registry.registerAgent("first", {
+      scopeKey: "private:123",
+      label: "Private document",
+      tools: [
+        {
+          name: "read_document",
+          description: "Read the document",
+          parameters: { type: "object" },
+          execute: () => "secret",
+        },
+      ],
+    });
+
+    const report = JSON.stringify(registry.inspect());
+    expect(report).not.toContain("private/document");
+    expect(report).not.toContain("private:123");
+    expect(report).not.toContain("secret");
+    expect(registry.inspect().surfaces[0]?.registeredAgentTools).toBe(1);
   });
 });

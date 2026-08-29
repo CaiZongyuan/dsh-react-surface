@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { Context } from "@deepseek-ai/cordis";
 import type { Agent } from "@deepseek-ai/dsh-agent";
 import { SessionId } from "@deepseek-ai/dsh-session";
@@ -7,18 +8,31 @@ import type {} from "@deepseek-ai/dsh-host-webserver";
 
 import {
   SURFACE_AGENT_MAX_BODY_BYTES,
+  SURFACE_AGENT_LEASE_TTL_MS,
   SURFACE_AGENT_PATH,
+  type SurfaceAgentCapabilities,
   type SurfaceAgentEnvelope,
   type SurfaceAgentErrorEnvelope,
   type SurfaceAgentInvocation,
   type SurfaceAgentLeaseRequest,
+  type SurfaceAgentLeaseResponse,
   type SurfaceAgentPollRequest,
   type SurfaceAgentReleaseRequest,
   type SurfaceAgentResultRequest,
 } from "./agent-protocol.ts";
+import { isSurfaceHostRequestAllowed } from "./trust-fence.ts";
+
+const SURFACE_AGENT_CAPABILITIES: SurfaceAgentCapabilities = Object.freeze({
+  available: true,
+  protocolVersion: 1,
+  features: Object.freeze([
+    "capability-token",
+    "lease-ttl",
+    "session-scoped-tools",
+  ] as const),
+});
 
 interface BrowserToolLeasePort {
-  update(tools: readonly BrowserToolDescriptorPort[]): void;
   dispose(): void;
 }
 
@@ -90,6 +104,13 @@ export class SurfaceAgentHost {
     response: ServerResponse,
   ): Promise<void> {
     try {
+      if (!isSurfaceHostRequestAllowed(this.ctx, request)) {
+        throw new SurfaceAgentHttpError(
+          "REQUEST_NOT_TRUSTED",
+          "Surface Agent bridge accepts only loopback or live paired requests",
+          403,
+        );
+      }
       if (request.method !== "POST") {
         response.setHeader("allow", "POST");
         throw new SurfaceAgentHttpError(
@@ -103,9 +124,13 @@ export class SurfaceAgentHost {
         "http://dsh.local",
       ).pathname;
       switch (pathname) {
+        case `${SURFACE_AGENT_PATH}/capabilities`:
+          sendJson(response, 200, { data: SURFACE_AGENT_CAPABILITIES });
+          return;
         case `${SURFACE_AGENT_PATH}/lease`:
-          await this.#lease(parseLease(await readJson(request)));
-          sendJson(response, 200, { data: { active: true } });
+          sendJson(response, 200, {
+            data: await this.#lease(parseLease(await readJson(request))),
+          });
           return;
         case `${SURFACE_AGENT_PATH}/poll`: {
           const input = parsePoll(await readJson(request));
@@ -128,8 +153,8 @@ export class SurfaceAgentHost {
         }
         case `${SURFACE_AGENT_PATH}/release`: {
           const input = parseRelease(await readJson(request));
-          const lease = this.#leases.get(input.clientId);
-          if (lease?.revision === input.revision) lease.dispose();
+          const lease = this.#requireLease(input);
+          lease.dispose();
           sendJson(response, 200, { data: { released: true } });
           return;
         }
@@ -162,7 +187,9 @@ export class SurfaceAgentHost {
     }
   }
 
-  async #lease(input: SurfaceAgentLeaseRequest): Promise<void> {
+  async #lease(
+    input: SurfaceAgentLeaseRequest,
+  ): Promise<SurfaceAgentLeaseResponse> {
     const agent = this.ctx.agents.get(SessionId(input.sessionId));
     if (!agent) {
       throw new SurfaceAgentHttpError(
@@ -173,7 +200,14 @@ export class SurfaceAgentHost {
     }
 
     this.#leases.get(input.clientId)?.dispose();
-    this.#bySession.get(input.sessionId)?.dispose();
+    const sessionLease = this.#bySession.get(input.sessionId);
+    if (sessionLease && sessionLease.input.clientId !== input.clientId) {
+      throw new SurfaceAgentHttpError(
+        "LEASE_CONTENDED",
+        "Another browser tab currently owns this DSH Session Surface lease",
+        409,
+      );
+    }
     const lease = new SurfaceAgentHostLease(
       input,
       (transport) =>
@@ -194,23 +228,34 @@ export class SurfaceAgentHost {
     );
     this.#leases.set(input.clientId, lease);
     this.#bySession.set(input.sessionId, lease);
+    return {
+      active: true,
+      token: lease.token,
+      ttlMs: SURFACE_AGENT_LEASE_TTL_MS,
+    };
   }
 
   #requireLease(input: SurfaceAgentPollRequest): SurfaceAgentHostLease {
     const lease = this.#leases.get(input.clientId);
-    if (!lease || lease.revision !== input.revision) {
+    if (
+      !lease ||
+      lease.revision !== input.revision ||
+      !sameCapabilityToken(lease.token, input.token)
+    ) {
       throw new SurfaceAgentHttpError(
         "LEASE_NOT_ACTIVE",
         "The Surface Agent lease is no longer active",
         409,
       );
     }
+    lease.touch();
     return lease;
   }
 }
 
 class SurfaceAgentHostLease {
   readonly revision: number;
+  readonly token = randomBytes(32).toString("base64url");
   readonly #pending = new Map<string, PendingInvocation>();
   readonly #queue: SurfaceAgentInvocation[] = [];
   readonly #toolLease: BrowserToolLeasePort;
@@ -221,6 +266,7 @@ class SurfaceAgentHostLease {
       }
     | undefined;
   #disposed = false;
+  #expiryTimer: ReturnType<typeof setTimeout>;
 
   constructor(
     readonly input: SurfaceAgentLeaseRequest,
@@ -236,6 +282,19 @@ class SurfaceAgentHostLease {
     this.#toolLease = bind({
       invoke: (call, signal) => this.#invoke(call, signal),
     });
+    this.#expiryTimer = setTimeout(
+      () => this.dispose(),
+      SURFACE_AGENT_LEASE_TTL_MS,
+    );
+  }
+
+  touch(): void {
+    if (this.#disposed) return;
+    clearTimeout(this.#expiryTimer);
+    this.#expiryTimer = setTimeout(
+      () => this.dispose(),
+      SURFACE_AGENT_LEASE_TTL_MS,
+    );
   }
 
   poll(signal: AbortSignal): Promise<SurfaceAgentInvocation | null> {
@@ -288,6 +347,7 @@ class SurfaceAgentHostLease {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
+    clearTimeout(this.#expiryTimer);
     const waiter = this.#waiter;
     this.#waiter = undefined;
     waiter?.resolve(null);
@@ -411,6 +471,7 @@ function parsePoll(value: unknown): SurfaceAgentPollRequest {
   return {
     clientId: requireIdentifier(input.clientId, "clientId", 128),
     revision: requireRevision(input.revision),
+    token: requireToken(input.token),
   };
 }
 
@@ -474,6 +535,22 @@ function requireRevision(value: unknown): number {
     throw invalidInput("revision must be a positive integer");
   }
   return value as number;
+}
+
+function requireToken(value: unknown): string {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{32,128}$/.test(value)) {
+    throw invalidInput("token is invalid");
+  }
+  return value;
+}
+
+function sameCapabilityToken(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return (
+    leftBuffer.byteLength === rightBuffer.byteLength &&
+    timingSafeEqual(leftBuffer, rightBuffer)
+  );
 }
 
 function invalidInput(message: string): SurfaceAgentHttpError {

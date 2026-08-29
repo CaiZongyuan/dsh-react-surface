@@ -122,7 +122,7 @@ const styles = `
   border-color: var(--surface-accent);
   color: white;
 }
-@media (max-width: 560px) {
+@container dsh-react-surface-content (max-width: 560px) {
   .example-main { padding: 14px; }
   .counter-tool { padding: 18px; }
 }
@@ -196,10 +196,45 @@ function BasicSurface({ location, navigate, close }: ReactSurfaceProps) {
 const definition = defineReactSurface({
   id: "example.basic",
   title: "Basic Surface",
+  description: "A branded React application with flexible DSH layouts",
   component: BasicSurface,
   styles,
   initialLocation: "/counter",
-  layout: "workspace",
+  layout: {
+    default: "workspace",
+    supported: [
+      "full-frame",
+      "center",
+      "workspace",
+      "right-panel",
+      "bottom-panel",
+    ],
+    fallback: "full-frame",
+    resizable: true,
+    persist: true,
+  },
+  branding: {
+    shell: "surface",
+    colorScheme: "light",
+    identity: {
+      name: "React Surface",
+      mark: "RS",
+    },
+    tokens: {
+      accent: "#2367d1",
+      accentForeground: "#ffffff",
+      background: "#f7f8fa",
+      border: "#dfe3e8",
+      elevated: "#eef1f5",
+      foreground: "#252730",
+      mutedForeground: "#6b7280",
+      surface: "#ffffff",
+    },
+  },
+  lifecycle: {
+    mount: "lazy",
+    retention: "keep-alive",
+  },
 });
 
 export const inject = ["reactSurfaces"];

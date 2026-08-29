@@ -2,148 +2,158 @@
 
 [English](README.md) | 简体中文
 
-`dsh-react-surface` 是一个 DSH 原生运行时，用于将独立打包的 React 应用挂载为全框架或工作区 Surface。应用隐藏时仍保留自身状态，共享 DSH 提供的 React 运行时，并渲染在相互隔离的 ShadowRoot 中。
+`dsh-react-surface` 用于把现有的客户端 React 应用接入 DeepSeek Harness，成为 DSH 原生 Surface。应用继续拥有自己的 UI、状态和业务逻辑；Runtime 统一负责 DSH 布局、生命周期、样式隔离、Shell 品牌协调、响应式降级、诊断和可选 Agent 协作。
 
-本仓库目前面向 DeepSeek Harness `0.1.1-rc.2`。它是实验性集成包，并非稳定的公开版本。
+仓库目前面向 DeepSeek Harness `0.1.1-rc.2`，暂时通过 GitHub 源码安装，尚未发布 npm 版本。
+
+## 核心能力
+
+- 使用一个类型化的 `defineReactSurface(...)` 接入 Vite React 或 Next.js Client Component。
+- 每个应用使用独立 ShadowRoot，并自动打包 CSS、CSS Modules、图片和字体。
+- 支持 `full-frame`、`center`、`workspace`、`right-panel`、`bottom-panel` 五种布局。
+- 支持键盘可访问的拖动分隔条、响应式降级和版本化的纯 UI 偏好。
+- 可以只设置 Surface 样式，也可以在 Surface 激活期间协调整个可见 DSH Shell 的品牌 Token。
+- 支持 lazy mount、隐藏后保留状态以及关闭时卸载。
+- 通过 `ctx.reactSurfaces.inspect()` 获取不包含业务数据的本地诊断报告。
+- 可选搭配 `dsh-ag-ui`，让当前 DSH Agent 感知和操作激活的 Surface。
+
+Runtime 不加载任意 HTML、远程应用、iframe 或 Next.js 服务端产物。安装的 Surface 插件属于可信代码；ShadowRoot 只提供样式隔离，不是安全沙箱。
 
 ## 架构
 
 ```text
 DSH Web
-├─ dsh-react-surface
-│  ├─ shell.overlay -> ReactSurfaceHost
-│  ├─ sidebar.footer.action -> 应用启动入口
-│  └─ ctx.reactSurfaces -> register/open/close/navigate
+├─ dsh-react-surface Runtime
+│  ├─ 小型 ctx.reactSurfaces Interface
+│  ├─ Host Adapter：布局、品牌、兼容与完整清理
+│  ├─ 每个已挂载应用一个 ShadowRoot
+│  └─ 可选 dsh-ag-ui Session Tool Lease
 └─ 应用 Adapter 插件
-   ├─ example.basic
-   ├─ ankang.his
-   └─ 其他 React 应用
+   ├─ 引入现有 React 根组件
+   ├─ 声明布局、生命周期和品牌 Token
+   └─ 按需注册浏览器 Tools
 ```
 
-运行时不会加载任意 Vite HTML 产物。每个应用都需要编译为 DSH Client 插件，并注册一个类型化 React Surface。
+应用 Adapter 不需要查询 DSH DOM，也不需要直接调用 DSH Slot。Router、Provider、数据、权限和业务行为仍由应用自己负责。
 
-仓库有三个刻意分离的职责：
+## 源码安装
 
-- `packages/runtime` 是 DSH 插件及浏览器运行时。
-- `packages/build` 是可复用的 Bun 构建 Adapter，负责生成 DSH lazy-CJS 产物。
-- `examples/basic-surface` 是独立的应用插件，也是前两个包的首个消费者。
+克隆并验证 Runtime：
 
-## 环境要求
+```powershell
+git clone https://github.com/CaiZongyuan/dsh-react-surface.git
+cd dsh-react-surface
+bun install
+bun run check
+```
 
-- Bun `1.4.0` 或更高版本
-- Node.js `22.19.0` 或更高版本
-- DeepSeek Harness `0.1.1-rc.2`
-- `PATH` 中可用的 `pnpm`，因为 `dsh plugin` 会把 Profile 包管理委托给 pnpm
+在现有 Vite 或 Next.js 项目中生成 Adapter：
 
-## 开发
+```powershell
+bun packages/build/src/cli.ts init D:\Projects\my-react-app --framework vite
+```
+
+命令默认创建 `integrations/dsh`，不会覆盖应用文件。可以使用 `--entry`、`--id`、`--title`、`--output` 和 `--dry-run` 调整生成结果。
+
+构建并安装到 DSH Web Profile：
+
+```powershell
+cd D:\Projects\my-react-app\integrations\dsh
+bun install
+bun run build
+
+dsh.cmd plugin --profile web add D:\Projects\dsh-react-surface\packages\runtime
+dsh.cmd plugin --profile web add D:\Projects\my-react-app\integrations\dsh
+dsh.cmd web
+```
+
+修改安装依赖图后需要重启 DSH；修改 Client 代码后重新构建并刷新浏览器。
+
+## Flexible Layout
+
+```ts
+layout: {
+  default: "workspace",
+  supported: [
+    "full-frame",
+    "center",
+    "workspace",
+    "right-panel",
+    "bottom-panel",
+  ],
+  fallback: "full-frame",
+  resizable: true,
+  persist: true,
+}
+```
+
+插件作者声明允许的布局，用户从统一启动器中切换。Runtime 保存的只有布局、面板尺寸和折叠状态，不保存应用业务数据。未知 DSH 结构或空间不足时会安全降级，不会盲目修改宿主 DOM。
+
+## 品牌协调
+
+```ts
+branding: {
+  shell: "surface",
+  colorScheme: "light",
+  identity: { name: "Acme Dashboard", mark: "AD" },
+  tokens: {
+    accent: "#176b4d",
+    accentForeground: "#ffffff",
+    background: "#f6f8f7",
+    surface: "#ffffff",
+    elevated: "#e9efec",
+    foreground: "#202723",
+    mutedForeground: "#66736c",
+    border: "#d7dfdb",
+    fontFamily: "Inter, system-ui, sans-serif",
+    radius: "6px",
+  },
+}
+```
+
+`shell: "preserve"` 只影响应用 ShadowRoot；`shell: "surface"` 会在 Surface 激活期间把稳定语义 Token 映射到经过验证的 DSH Shell Token。存在官方 Sidebar 品牌槽时，`identity` 还会临时替换左上角标记和名称。关闭或卸载后按所有权恢复，不会覆盖其他插件之后写入的新值。
+
+## 可选 dsh-ag-ui
+
+未安装 `dsh-ag-ui` 时，挂载、布局、导航和品牌功能全部正常工作，`capabilities.agent.status` 返回 `unavailable`。
+
+安装后，应用可以通过 `agent.register(...)` 向当前原生 DSH Session 发布浏览器 Tools。Tools 只在 Surface 和 Session 同时激活期间存在。Bridge 使用 loopback/live-pair 门禁、Web Locks、多标签 leadership、随机 capability token 和 Host TTL。
+
+中立示例位于 [`examples/ag-ui-tools`](examples/ag-ui-tools)，不包含任何特定业务项目内容。
+
+## Next.js
+
+这里的 Next.js 支持是 Client Surface 支持：Client Components、Provider、Hooks 和浏览器状态可以复用；Server Components、Server Actions、Middleware 和 Next Server 继续运行在原部署中。
+
+当前 DSH cohort 提供 React `18.3.1`。即使 React 19 项目可以完成构建，使用 React 19 专属 Runtime API 的组件仍需要未来兼容的 DSH cohort。
+
+详细限制和接入方式见 [Next.js Client 接入](docs/next-client.md)。
+
+## 开发验证
 
 ```powershell
 bun install
 bun run check
 ```
 
-`bun run check` 会对整个 workspace 做类型检查，运行 registry 测试，构建两个 DSH 包，验证 lazy-CJS 产物并检查格式。
+`bun run check` 会执行类型检查、全部测试、Runtime 和真实示例构建、DSH lazy-CJS 产物检查及格式检查。
 
-## 安装本地 PoC
-
-先构建各个包：
+真实 DSH 浏览器验证单独运行：
 
 ```powershell
-bun run build
+bun run test:e2e
+$env:DSH_AG_UI_DIR = "D:\Projects\Frontend\dsh-ag-ui"
+bun run test:e2e
 ```
 
-把运行时和独立示例安装到 DSH Web Profile：
+第一条验证未安装 `dsh-ag-ui` 时的安全降级；第二条还会打包并安装显式指定的 AG-UI 源码仓库。
 
-```powershell
-dsh.cmd plugin --profile web add ./packages/runtime
-dsh.cmd plugin --profile web add ./examples/basic-surface
-dsh.cmd web
-```
+更多文档：
 
-修改已安装的包依赖图后需要重启 DSH。修改 Client 代码后需要重新构建并刷新浏览器。
-
-## 注册应用
-
-一个应用 Adapter 包含 Host 入口、DSH Client manifest，以及负责注册 React 根组件的 Client 入口。没有 Host 行为时，Host 入口可以为空：
-
-```tsx
-import { useEffect } from "react";
-import type { ClientContext } from "@deepseek-ai/dsh-client-runtime/client";
-import {
-  defineReactSurface,
-  type ReactSurfaceProps,
-} from "dsh-react-surface/client";
-
-function Application({
-  agent,
-  close,
-  location,
-  navigate,
-  portalRoot,
-}: ReactSurfaceProps) {
-  useEffect(
-    () =>
-      agent.register({
-        scopeKey: "document:current",
-        label: "示例应用",
-        tools: [
-          {
-            name: "example_get_context",
-            description: "读取当前应用上下文。",
-            parameters: {
-              type: "object",
-              properties: {},
-              additionalProperties: false,
-            },
-            execute: () => JSON.stringify(readCurrentContext()),
-          },
-        ],
-      }),
-    [agent],
-  );
-  return <YourApp />;
-}
-
-const definition = defineReactSurface({
-  id: "example.application",
-  title: "示例应用",
-  component: Application,
-  styles: "/* 应用 CSS */",
-  layout: "workspace",
-});
-
-export const inject = ["reactSurfaces"];
-
-export function apply(ctx: ClientContext) {
-  ctx.effect(() => ctx.reactSurfaces.register(definition));
-}
-```
-
-`layout` 默认为 `"full-frame"`，会覆盖完整 DSH 框架。使用 `"workspace"` 可以保留左侧 DSH Sidebar，把应用放在中央，并保留右侧原生 Conversation/Details 区域。运行时会自动跟踪 Sidebar、Details 和视口尺寸变化；当中央应用宽度不足时，会回退为全框架模式。
-
-Adapter 包必须同时声明 `dsh.bundle.patch` 和 `dsh.client`。它还必须在 `dsh.client.external` 中列出 `dsh-react-surface/client`，从而让 DSH 模块图提供唯一共享的运行时实现。
-
-可选的 `agent` 注册只会在该 Surface 与一个 DSH 原生 Session 同时处于当前状态时生效。Host 通过始终启用的 `dsh-ag-ui/browser-tools` Cordis 行绑定 Tool 目录。关闭 Surface、切换 Session、修改 `scopeKey`、卸载任一插件或丢失浏览器租约，都会撤销 Agent-scoped Tools。应用上下文更适合通过即时读取 Tool 暴露，而不是复制到每一条提示词中。
-
-使用以下命令构建 Adapter 包：
-
-```powershell
-bunx dsh-react-surface-build .
-```
-
-包约定使用 `src/index.ts` 作为 Host 入口，使用 `src/client/index.tsx` 作为 Client 入口。构建器会生成 `lib/index.js` 和一个包装后的 `lib/client.js`；应用自己的 TypeScript 配置仍负责生成声明文件。
-
-## 运行时接口
-
-`ctx.reactSurfaces` 刻意保持一个较小的接口：
-
-- `register(definition)` 把应用生命周期绑定到所属插件。
-- `ReactSurfaceProps.agent.register(...)` 为当前原生 Session 发布可替换的上下文和浏览器 Tools。
-- `open(id, location?)` 显示应用。
-- `close()` 露出 DSH 原生工作区。
-- `navigate(location)` 更新当前应用保留的内部位置。
-- `getSnapshot()` 和 `subscribe()` 支持 React 与非 React 消费者。
-
-运行时负责 DSH Slot 注册、ShadowRoot 创建、应用可见性、原生 Session 租约、Tool 传输、错误隔离和共享 React。应用 Adapter 负责路由、Provider、业务状态、能力声明和后端集成。
-
-更多生命周期与模块说明见[架构文档](docs/architecture.md)，下一阶段的实现示例见 [HIS 集成文档](docs/his-integration.md)。
+- [应用接入](docs/application-integration.md)
+- [布局与品牌](docs/layouts-and-branding.md)
+- [Next.js Client 接入](docs/next-client.md)
+- [可选 dsh-ag-ui 接入](docs/ag-ui.md)
+- [架构](docs/architecture.md)
+- [安全模型](SECURITY.md)
+- [参与贡献](CONTRIBUTING.md)

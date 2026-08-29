@@ -18,5 +18,9 @@
 
 - Run `bun run check` before considering a change complete.
 - Keep registry behavior covered by Bun tests.
+- Keep layout behavior in the pure layout engine and DSH DOM ownership in the Host Adapter.
+- Keep application CSS inside its ShadowRoot; shell branding uses semantic tokens only.
 - Build verification must reject extra chunks, ESM imports, and bundled React copies.
+- Host routes require loopback/live-pair trust checks and bounded runtime validation.
+- Examples must be product-neutral, independently installable DSH consumers.
 - Preserve keyboard access, accessible names, stable layout, and style isolation in every surface host.
