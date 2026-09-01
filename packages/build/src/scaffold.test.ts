@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { scaffoldReactSurface } from "./scaffold.ts";
-import { buildDshReactPackage } from "./index.ts";
+import {
+  buildDshReactPackage,
+  DSH_CLIENT_BASELINE_EXTERNALS,
+} from "./index.ts";
 
 const directories: string[] = [];
 
@@ -28,6 +31,12 @@ async function project(manifest: object) {
 }
 
 describe("scaffoldReactSurface", () => {
+  test("tracks the DSH Client platform module cohort", () => {
+    expect(DSH_CLIENT_BASELINE_EXTERNALS).toContain(
+      "@deepseek-ai/dsh-client-store",
+    );
+  });
+
   test("detects Vite and generates an isolated in-repository Adapter", async () => {
     const directory = await project({
       name: "@acme/dashboard",
@@ -42,12 +51,15 @@ describe("scaffoldReactSurface", () => {
     ) as { name: string; dsh: { client: { external: string[] } } };
     expect(manifest.name).toBe("dashboard-dsh-surface");
     expect(manifest.dsh.client.external).toContain("dsh-react-surface/client");
-    expect(
-      await readFile(
-        join(result.outputDirectory, "src", "client", "index.tsx"),
-        "utf8",
-      ),
-    ).toContain('id: "app.dashboard"');
+    const entry = await readFile(
+      join(result.outputDirectory, "src", "client", "index.tsx"),
+      "utf8",
+    );
+    expect(entry).toContain('id: "app.dashboard"');
+    expect(entry).toContain(
+      'import type { Context as ClientContext } from "@deepseek-ai/cordis";',
+    );
+    expect(entry).not.toContain("dsh-client-runtime");
   });
 
   test("generates a client-only Next Surface template", async () => {

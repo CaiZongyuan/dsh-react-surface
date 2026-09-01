@@ -46,7 +46,7 @@ Application Adapters do not receive the Host Adapter, preference store, effect l
 
 ## Shell Coordination
 
-The Client mounts through official `shell.overlay` and `sidebar.footer.action` Slots. Split layouts require geometry from the DSH frame. The Host Adapter resolves official semantic pane attributes first, then the tested rc.2 frame structure as a centralized fallback.
+The Client mounts through official `shell.overlay` and `sidebar.footer.action` Slots. Split layouts require geometry from the DSH frame. The Host Adapter resolves official semantic pane attributes first, then the tested `0.1.2-alpha.3` frame structure as a centralized fallback.
 
 The pure layout engine receives only geometry, semantic layout, constraints, and retained UI sizes. It produces Surface bounds, native pane sizing, resize metadata, and an explicit fallback reason. Unknown or unusable geometry falls back to full-frame rather than mutating an unrecognized shell.
 
@@ -92,6 +92,6 @@ DSH pairing authorizes entry to this bridge, not application data. Every applica
 
 ## Compatibility
 
-The current tested cohort is DSH `0.1.1-rc.2` with React `18.3.1`. Runtime `version`, `interfaceVersion`, and monotonic `features` let Adapters detect capability rather than guess from package versions.
+The current tested cohort is DSH `0.1.2-alpha.3` with React `18.3.1`. Client plugins use Cordis for their context type and the DSH UI Renderer for Slot ownership; the removed Client Runtime aggregate is not part of the cohort. Runtime `version`, `interfaceVersion`, and monotonic `features` let Adapters detect capability rather than guess from package versions.
 
 Any future DSH cohort change requires unit tests, packaged artifact checks, and a real browser mount before its compatibility claim is updated.

@@ -242,10 +242,11 @@ async function dismissOnboarding(
   for (let round = 0; round < 8; round += 1) {
     let dismissed = false;
     const buttons = page.getByRole("button", { name: actionPattern });
-    for (let index = 0; index < (await buttons.count()); index += 1) {
+    for (let index = (await buttons.count()) - 1; index >= 0; index -= 1) {
       const button = buttons.nth(index);
       try {
-        await button.click({ timeout: 4_000 });
+        if (!(await button.isVisible())) continue;
+        await button.click({ force: true, timeout: 4_000 });
         dismissed = true;
         await page.waitForTimeout(250);
       } catch {
