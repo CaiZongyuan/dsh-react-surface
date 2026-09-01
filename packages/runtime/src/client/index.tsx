@@ -1,6 +1,7 @@
-import type { ClientContext } from "@deepseek-ai/dsh-client-runtime/client";
+import type { Context as ClientContext } from "@deepseek-ai/cordis";
 import type { SidebarFooterActionOwnerProps } from "@deepseek-ai/dsh-client-ui-sidebar/client";
 import type {} from "@deepseek-ai/dsh-client-ui-layout/client";
+import type {} from "@deepseek-ai/dsh-client-ui-renderer/client";
 
 import type { ReactSurfaceRegistry } from "./contracts.ts";
 import {
@@ -59,7 +60,7 @@ declare module "@deepseek-ai/cordis" {
   }
 }
 
-export const inject = ["slots"];
+export const inject = ["slots", "sessions"];
 
 export function apply(ctx: ClientContext): void {
   const registry = new ReactSurfaceRegistryImpl(

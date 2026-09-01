@@ -4,7 +4,7 @@ English | [简体中文](README.zh.md)
 
 `dsh-react-surface` lets an existing client-side React application run as a native DeepSeek Harness surface. The application keeps its own UI and state, while the runtime owns DSH placement, lifecycle, style isolation, shell branding, responsive layouts, diagnostics, and optional Agent collaboration.
 
-The repository currently targets DeepSeek Harness `0.1.1-rc.2` and is installed from source. It is not an npm release yet.
+The repository currently targets DeepSeek Harness `0.1.2-alpha.3` and is installed from source. It is not an npm release yet.
 
 ## What It Provides
 
@@ -72,7 +72,7 @@ Restart DSH after changing the installed package graph. Rebuild the Adapter and 
 ## Register A Surface
 
 ```tsx
-import type { ClientContext } from "@deepseek-ai/dsh-client-runtime/client";
+import type { Context as ClientContext } from "@deepseek-ai/cordis";
 import {
   defineReactSurface,
   type ReactSurfaceProps,
@@ -199,7 +199,7 @@ Requirements:
 
 - Bun `1.4.0` or newer
 - Node.js `22.19.0` or newer
-- DeepSeek Harness `0.1.1-rc.2`
+- DeepSeek Harness `0.1.2-alpha.3`
 - `pnpm` on `PATH`, used internally by `dsh plugin`
 
 Run the full local quality gate:

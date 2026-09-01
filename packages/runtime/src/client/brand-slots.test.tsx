@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ClientContext } from "@deepseek-ai/dsh-client-runtime/client";
+import type { Context as ClientContext } from "@deepseek-ai/cordis";
 
 import type { ReactSurfaceProps } from "./contracts.ts";
 import { activateSurfaceBrandSlots } from "./brand-slots.tsx";

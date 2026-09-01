@@ -134,7 +134,7 @@ function planFiles({
       },
     },
     peerDependencies: {
-      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/cordis": "^4.0.2",
       "dsh-react-surface": "*",
       react: "^18.2.0 || ^19.0.0",
       "react-dom": "^18.2.0 || ^19.0.0",
@@ -188,7 +188,7 @@ function planFiles({
 }
 
 function clientEntryTemplate(surfaceId: string, title: string): string {
-  return `import type { ClientContext } from "@deepseek-ai/dsh-client-runtime/client";
+  return `import type { Context as ClientContext } from "@deepseek-ai/cordis";
 import { defineReactSurface } from "dsh-react-surface/client";
 
 import { SurfaceRoot } from "./surface-root.tsx";

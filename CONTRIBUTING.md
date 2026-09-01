@@ -13,7 +13,7 @@ bun install
 bun run check
 ```
 
-Use Bun for dependency installation, scripts, builds, and tests. Keep DSH `0.1.1-rc.2` as the compatibility baseline until a deliberate cohort change includes a real browser mount.
+Use Bun for dependency installation, scripts, builds, and tests. Keep DSH `0.1.2-alpha.3` as the compatibility baseline until a deliberate cohort change includes a real browser mount.
 
 ## Change Expectations
 

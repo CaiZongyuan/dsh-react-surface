@@ -4,7 +4,7 @@
 
 `dsh-react-surface` 用于把现有的客户端 React 应用接入 DeepSeek Harness，成为 DSH 原生 Surface。应用继续拥有自己的 UI、状态和业务逻辑；Runtime 统一负责 DSH 布局、生命周期、样式隔离、Shell 品牌协调、响应式降级、诊断和可选 Agent 协作。
 
-仓库目前面向 DeepSeek Harness `0.1.1-rc.2`，暂时通过 GitHub 源码安装，尚未发布 npm 版本。
+仓库目前面向 DeepSeek Harness `0.1.2-alpha.3`，暂时通过 GitHub 源码安装，尚未发布 npm 版本。
 
 ## 核心能力
 

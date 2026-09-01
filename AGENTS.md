@@ -4,7 +4,7 @@
 
 - Use Bun for dependency installation, scripts, builds, and tests.
 - Keep the runtime product-neutral. Business applications belong in adapters or examples.
-- Pin compatibility work to DSH `0.1.1-rc.2` until a deliberate upgrade changes the baseline.
+- Pin compatibility work to DSH `0.1.2-alpha.3` until a deliberate upgrade changes the baseline.
 
 ## Architecture
 
