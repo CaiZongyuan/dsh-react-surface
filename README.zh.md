@@ -69,6 +69,8 @@ dsh.cmd web
 
 修改安装依赖图后需要重启 DSH；修改 Client 代码后重新构建并刷新浏览器。
 
+如果旧版运行时在加载插件时报 `Cannot read properties of undefined (reading 'list')`，请在本仓库执行 `bun run build`，使用上面的命令重新安装 `packages/runtime`，然后重启 DSH。运行时会在 Session Controller 就绪后启动 Agent 桥接；该服务不可用时，普通 Surface 仍可使用。
+
 ## Flexible Layout
 
 ```ts

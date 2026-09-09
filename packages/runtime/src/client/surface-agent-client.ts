@@ -1,5 +1,3 @@
-import type { Context as ClientContext } from "@deepseek-ai/cordis";
-
 import {
   SURFACE_AGENT_PATH,
   type SurfaceAgentCapabilities,
@@ -24,7 +22,7 @@ interface ActiveLease {
   readonly poll: AbortController;
 }
 
-interface ClientSessionsPort {
+export interface ClientSessionsPort {
   readonly list: {
     getSnapshot(): { current: string | undefined };
     subscribe(listener: () => void): () => void;
@@ -77,10 +75,10 @@ export class SurfaceAgentClientBridge {
   #disposed = false;
 
   constructor(
-    private readonly ctx: ClientContext,
+    sessions: ClientSessionsPort,
     private readonly registry: ReactSurfaceRegistryImpl,
   ) {
-    this.#sessions = ctx.get("sessions") as unknown as ClientSessionsPort;
+    this.#sessions = sessions;
     this.#unsubscribeRegistry = registry.subscribe(() => this.#scheduleSync());
     this.#unsubscribeSessions = this.#sessions.list.subscribe(() =>
       this.#scheduleSync(),

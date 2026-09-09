@@ -69,6 +69,8 @@ dsh.cmd web
 
 Restart DSH after changing the installed package graph. Rebuild the Adapter and refresh the browser after changing Client code.
 
+If an older runtime reports `Cannot read properties of undefined (reading 'list')` during plugin loading, rebuild this repository with `bun run build`, reinstall `packages/runtime` with the command above, and restart DSH. The runtime starts Agent bridging when the Session Controller becomes available; ordinary surfaces remain usable while that service is unavailable.
+
 ## Register A Surface
 
 ```tsx
