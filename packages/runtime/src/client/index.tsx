@@ -37,7 +37,10 @@ export type {
   ReactSurfaceSnapshot,
   RegisteredReactSurface,
 } from "./contracts.ts";
-import { SurfaceAgentClientBridge } from "./surface-agent-client.ts";
+import {
+  SurfaceAgentClientBridge,
+  type ClientSessionsPort,
+} from "./surface-agent-client.ts";
 import {
   REACT_SURFACE_FEATURES,
   REACT_SURFACE_INTERFACE_VERSION,
@@ -60,13 +63,12 @@ declare module "@deepseek-ai/cordis" {
   }
 }
 
-export const inject = ["slots", "sessions"];
+export const inject = ["slots"];
 
 export function apply(ctx: ClientContext): void {
   const registry = new ReactSurfaceRegistryImpl(
     createBrowserSurfacePreferences(),
   );
-  const agentBridge = new SurfaceAgentClientBridge(ctx, registry);
   const SurfaceHostEntry = () => <ReactSurfaceHost registry={registry} />;
   const SurfaceLauncherEntry = ({ wide }: SidebarFooterActionOwnerProps) => (
     <SurfaceLauncher registry={registry} wide={wide} />
@@ -74,6 +76,24 @@ export function apply(ctx: ClientContext): void {
 
   ctx.effect(() => {
     const disposeService = ctx.reflect.provide("reactSurfaces", registry);
+    // Bind the optional Agent bridge to the injected service's lifetime. The
+    // Surface host remains usable while the Session Controller is unavailable.
+    const agentScope = ctx.inject(["sessions"], (sessionCtx) => {
+      const sessions = (
+        sessionCtx as unknown as { sessions: ClientSessionsPort }
+      ).sessions;
+      sessionCtx.effect(() => {
+        const bridge = new SurfaceAgentClientBridge(sessions, registry);
+        return () => {
+          bridge.dispose();
+          registry.setAgentCapability({
+            available: false,
+            status: "unavailable",
+            reason: "DSH Session Controller is unavailable",
+          });
+        };
+      }, "dsh-react-surface: session agent bridge");
+    });
     const disposeOverlay = ctx.slots.inject("shell.overlay", () =>
       ctx.slots.register(
         {
@@ -102,7 +122,7 @@ export function apply(ctx: ClientContext): void {
       disposeBrandSlots();
       disposeLauncher();
       disposeOverlay();
-      agentBridge.dispose();
+      void agentScope.dispose();
       registry.dispose();
       void disposeService();
     };
