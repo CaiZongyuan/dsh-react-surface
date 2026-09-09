@@ -11,9 +11,25 @@ const resultsDirectory = join(repositoryRoot, "test-results", "mount");
 const profileDirectory = join(dshHome, "profiles", "web");
 const dshCommand =
   process.env.DSH_CMD ?? (process.platform === "win32" ? "dsh.cmd" : "dsh");
+const runtimeManifest = await Bun.file(
+  join(repositoryRoot, "packages", "runtime", "package.json"),
+).json();
+const dshVersion: string =
+  runtimeManifest.peerDependencies["@deepseek-ai/dsh-client-ui-layout"];
 let server: ReturnType<typeof Bun.spawn> | undefined;
 
 try {
+  const actualVersion = (
+    await run(dshCommand, ["--version"], {
+      cwd: repositoryRoot,
+      env: process.env,
+    })
+  ).trim();
+  if (actualVersion !== dshVersion) {
+    throw new Error(
+      `Expected DSH ${dshVersion}, received ${actualVersion}. Set DSH_CMD to the matching CLI.`,
+    );
+  }
   await mkdir(profileDirectory, { recursive: true });
   await mkdir(artifactsDirectory, { recursive: true });
   await mkdir(resultsDirectory, { recursive: true });
@@ -42,26 +58,17 @@ try {
     DSH_HOME: dshHome,
     DSH_TELEMETRY_DISABLED: "1",
   };
-  if (agUiTarball) {
-    await run(
-      dshCommand,
-      ["plugin", "--profile", "web", "add", `file:${agUiTarball}`],
-      { cwd: repositoryRoot, env: environment },
-    );
-  }
   await run(
     dshCommand,
-    ["plugin", "--profile", "web", "add", `file:${runtimeTarball}`],
-    { cwd: repositoryRoot, env: environment },
-  );
-  await run(
-    dshCommand,
-    ["plugin", "--profile", "web", "add", `file:${agentExampleTarball}`],
-    { cwd: repositoryRoot, env: environment },
-  );
-  await run(
-    dshCommand,
-    ["plugin", "--profile", "web", "add", `file:${exampleTarball}`],
+    [
+      "plugin",
+      "--profile",
+      "web",
+      "add",
+      ...[agUiTarball, runtimeTarball, agentExampleTarball, exampleTarball]
+        .filter((file): file is string => file !== undefined)
+        .map((file) => `file:${file}`),
+    ],
     { cwd: repositoryRoot, env: environment },
   );
 
@@ -74,7 +81,12 @@ try {
   const serverStdout = server.stdout as ReadableStream<Uint8Array>;
   const serverStderr = server.stderr as ReadableStream<Uint8Array>;
   const stderrPromise = readStream(serverStderr);
-  const { url, output } = await waitForDshUrl(serverStdout, 120_000);
+  const { url, output } = await waitForDshUrl(serverStdout, 120_000).catch(
+    async (error: unknown) => {
+      const stderr = await settleServer(server!, stderrPromise);
+      throw new Error(`DSH startup failed:\n${stderr}`, { cause: error });
+    },
+  );
 
   const browser = await chromium.launch({ headless: true });
   try {
@@ -167,6 +179,9 @@ try {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(layer).toHaveAttribute("data-surface-layout", "full-frame");
+    const rightbar = page.locator("[data-rightbar-col]");
+    await expect(rightbar).toHaveAttribute("aria-hidden", "true");
+    await expect(rightbar).toHaveJSProperty("inert", true);
     await expect(counter).toHaveText("1");
     await page.screenshot({
       path: join(resultsDirectory, "surface-mobile.png"),
@@ -175,6 +190,8 @@ try {
 
     await page.keyboard.press("Escape");
     await expect(layer).toHaveAttribute("aria-hidden", "true");
+    await expect(rightbar).not.toHaveAttribute("aria-hidden", "true");
+    await expect(rightbar).toHaveJSProperty("inert", false);
     expect(pageErrors, `DSH page errors:\n${pageErrors.join("\n")}`).toEqual(
       [],
     );
@@ -205,7 +222,10 @@ async function writeProfile(directory: string): Promise<void> {
       {
         name: "dsh-react-surface-e2e-profile",
         private: true,
-        dependencies: {},
+        dependencies: {
+          "@deepseek-ai/dsh-base": dshVersion,
+          "@deepseek-ai/dsh-web-app": dshVersion,
+        },
         dsh: {
           profile: {
             bundles: ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"],
@@ -220,7 +240,7 @@ async function writeProfile(directory: string): Promise<void> {
   await writeFile(join(directory, "cordis.patch.yml"), "[]\n", "utf8");
   await writeFile(
     join(directory, "pnpm-workspace.yaml"),
-    `packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: true\n\nallowBuilds:\n  node-pty: true\n  protobufjs: true\n\nminimumReleaseAgeExclude:\n  - dsh-react-surface\n  - dsh-react-surface-example-basic\n  - dsh-react-surface-example-ag-ui-tools\n  - dsh-ag-ui\n`,
+    `packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: true\n\nallowBuilds:\n  "@deepseek-ai/dsh-subprocess-local": true\n  "@google/genai": false\n  koffi: true\n  node-pty: true\n  protobufjs: true\n\nminimumReleaseAgeExclude:\n  - dsh-react-surface\n  - dsh-react-surface-example-basic\n  - dsh-react-surface-example-ag-ui-tools\n  - dsh-ag-ui\n`,
     "utf8",
   );
 }

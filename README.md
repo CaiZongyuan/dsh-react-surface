@@ -4,7 +4,7 @@ English | [简体中文](README.zh.md)
 
 `dsh-react-surface` lets an existing client-side React application run as a native DeepSeek Harness surface. The application keeps its own UI and state, while the runtime owns DSH placement, lifecycle, style isolation, shell branding, responsive layouts, diagnostics, and optional Agent collaboration.
 
-The repository currently targets DeepSeek Harness `0.1.2-alpha.3` and is installed from source. It is not an npm release yet.
+The repository currently targets DeepSeek Harness `0.1.5-alpha.1` and is installed from source. It is not an npm release yet.
 
 ## What It Provides
 
@@ -199,7 +199,7 @@ Requirements:
 
 - Bun `1.4.0` or newer
 - Node.js `22.19.0` or newer
-- DeepSeek Harness `0.1.2-alpha.3`
+- DeepSeek Harness `0.1.5-alpha.1`
 - `pnpm` on `PATH`, used internally by `dsh plugin`
 
 Run the full local quality gate:
@@ -216,6 +216,8 @@ bun run test:e2e
 $env:DSH_AG_UI_DIR = "D:\Projects\Frontend\dsh-ag-ui"
 bun run test:e2e
 ```
+
+The browser lane requires a DSH CLI matching `0.1.5-alpha.1`; set `DSH_CMD` to its executable path when the default `dsh` is a different version. Its temporary profile pins the base and Web bundles to the same cohort.
 
 The first command verifies graceful operation without `dsh-ag-ui`; the second also packs and installs the explicitly selected AG-UI source checkout.
 
