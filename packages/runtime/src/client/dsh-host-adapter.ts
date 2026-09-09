@@ -180,7 +180,9 @@ function locateShellElements(layer: HTMLElement): ShellElements | null {
   );
   const sidebarPane = frame.querySelector('[data-pane="sidebar"]');
   const conversationPane = frame.querySelector('[data-pane="conversation"]');
-  const detailsPane = frame.querySelector('[data-pane="details"]');
+  const detailsPane = frame.querySelector(
+    '[data-rightbar-col], [data-pane="details"]',
+  );
   const sidebar =
     directFrameChild(sidebarPane, frame) ?? contentChildren.at(0) ?? null;
   const conversation =
