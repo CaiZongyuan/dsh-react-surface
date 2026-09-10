@@ -30,6 +30,8 @@ Panel dimensions and the selected layout are stored under a versioned localStora
 
 ## Responsive Behavior
 
+The Sidebar footer launcher shows the active application's identity, or the sole application's identity when none is active. A sole inactive application opens directly; otherwise the launcher menu provides application switching, close, and supported layout controls. The rail shows only the mark with a full accessible name and tooltip. The menu grows upward from the footer and scrolls within the viewport.
+
 If a split cannot satisfy both application and native pane minimums, it falls back to `full-frame` or `center`. The requested and resolved layouts remain visible in `inspect()` diagnostics.
 
 Every ShadowRoot establishes named inline-size containers. Application CSS should use container queries because a Surface width can change without the browser viewport changing:
