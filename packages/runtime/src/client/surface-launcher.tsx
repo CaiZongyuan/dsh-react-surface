@@ -33,7 +33,11 @@ export function SurfaceLauncher({ registry, wide }: SurfaceLauncherProps) {
   const active = snapshot.surfaces.find(
     ({ definition }) => definition.id === snapshot.activeId,
   );
-  const label = active?.definition.title ?? "React applications";
+  const onlySurface =
+    snapshot.surfaces.length === 1 ? snapshot.surfaces[0] : undefined;
+  const presentedSurface = active ?? onlySurface;
+  const label = presentedSurface?.definition.title ?? "React applications";
+  const opensDirectly = onlySurface !== undefined && active === undefined;
 
   useEffect(() => {
     if (!menuOpen || !hasSurfaces) return;
@@ -53,16 +57,23 @@ export function SurfaceLauncher({ registry, wide }: SurfaceLauncherProps) {
   return (
     <div
       data-dsh-react-surface-launcher=""
-      style={{ minWidth: 0, padding: wide ? "4px 8px" : 4 }}
+      style={{ minWidth: 0, width: "100%" }}
     >
       <button
         ref={buttonRef}
         type="button"
-        aria-expanded={menuOpen}
-        aria-haspopup="menu"
-        aria-label="Open React applications"
+        aria-current={active ? "page" : undefined}
+        aria-expanded={opensDirectly ? undefined : menuOpen}
+        aria-haspopup={opensDirectly ? undefined : "menu"}
+        aria-label={label}
         title={wide ? undefined : label}
-        onClick={() => setMenuOpen((open) => !open)}
+        onClick={() => {
+          if (openSoleInactiveSurface(registry)) {
+            setMenuOpen(false);
+            return;
+          }
+          setMenuOpen((open) => !open);
+        }}
         style={{
           alignItems: "center",
           background: active
@@ -75,16 +86,16 @@ export function SurfaceLauncher({ registry, wide }: SurfaceLauncherProps) {
           display: "flex",
           font: "inherit",
           gap: 8,
-          height: 34,
+          height: 36,
           justifyContent: wide ? "flex-start" : "center",
-          minWidth: wide ? 0 : 34,
+          minWidth: wide ? 0 : 36,
           padding: wide ? "0 8px" : 0,
-          width: wide ? "100%" : 34,
+          width: wide ? "100%" : 36,
         }}
       >
         <SurfaceMark
           title={label}
-          mark={active?.definition.branding?.identity?.mark}
+          mark={presentedSurface?.definition.branding?.identity?.mark}
           active={active !== undefined}
         />
         {wide ? (
@@ -165,7 +176,7 @@ function SurfaceMenu({
           display: "grid",
           gap: 4,
           left,
-          maxHeight: "min(520px, calc(100dvh - 24px))",
+          maxHeight: `min(520px, calc(100dvh - ${String(bottom + 8)}px))`,
           overflowY: "auto",
           padding: 6,
           position: "fixed",
@@ -284,6 +295,18 @@ function SurfaceMenu({
       </div>
     </div>
   );
+}
+
+/** Open the only registered Surface without interposing the selection menu. */
+export function openSoleInactiveSurface(
+  registry: ReactSurfaceRegistry,
+): boolean {
+  const snapshot = registry.getSnapshot();
+  if (snapshot.activeId !== null || snapshot.surfaces.length !== 1) {
+    return false;
+  }
+  registry.open(snapshot.surfaces[0]!.definition.id);
+  return true;
 }
 
 function SurfaceMark({

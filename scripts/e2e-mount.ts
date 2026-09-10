@@ -102,6 +102,25 @@ try {
       '[data-dsh-react-surface-launcher] button[aria-haspopup="menu"]',
     );
     await expect(launcher).toBeVisible({ timeout: 30_000 });
+    await expect(
+      launcher.locator('xpath=ancestor::*[@data-slot="sidebar.footer.action"]'),
+    ).toHaveCount(1);
+    await page
+      .getByRole("button", { name: /^(Collapse sidebar|收起侧边栏)$/ })
+      .click();
+    await expect(launcher).toHaveAttribute("title", "React applications");
+    await expect(launcher).toHaveText("RA");
+    await page
+      .getByRole("button", { name: /^(Open sidebar|打开侧边栏)$/ })
+      .click();
+    await expect(launcher).not.toHaveAttribute("title", /.+/);
+    await page.setViewportSize({ width: 980, height: 900 });
+    await expect(
+      page.getByRole("button", { name: /^(Open sidebar|打开侧边栏)$/ }),
+    ).toBeVisible();
+    await expect(launcher).toHaveAttribute("title", "React applications");
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(launcher).not.toHaveAttribute("title", /.+/);
     try {
       await launcher.click();
     } catch (error) {
@@ -119,6 +138,8 @@ try {
       );
     }
     await page.getByRole("menuitem", { name: /Basic Surface/ }).click();
+    await expect(launcher).toHaveAttribute("aria-label", "Basic Surface");
+    await expect(launcher).toHaveAttribute("aria-current", "page");
 
     const layer = page.locator("[data-dsh-react-surface-layer]");
     await expect(layer).toHaveAttribute("data-surface-layout", "workspace");

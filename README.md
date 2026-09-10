@@ -13,6 +13,7 @@ The repository currently targets DeepSeek Harness `0.1.5-alpha.1` and is install
 - `full-frame`, `center`, `workspace`, `right-panel`, and `bottom-panel` layouts.
 - Accessible resize handles, responsive fallback, and versioned UI-only preferences.
 - Surface-only styling or temporary semantic branding of the visible DSH shell.
+- A Sidebar footer action that opens a sole application directly and retains a menu for switching applications and layouts.
 - Lazy mount, keep-alive, and unmount-on-close lifecycle policies.
 - A local diagnostic report through `ctx.reactSurfaces.inspect()`.
 - Optional `dsh-ag-ui` browser Tools scoped to the active Surface and native DSH Session.
@@ -109,6 +110,8 @@ export function apply(ctx: ClientContext) {
 The package manifest must declare the same Surface id under `dsh.reactSurface.id`. The build adapter uses it to attach extracted CSS to the correct ShadowRoot.
 
 ## Brand The Shell
+
+The Sidebar action uses the active Surface's title and identity mark, or the sole registered application's identity before it is opened. One inactive Surface opens on the first click. An active Surface or multiple registered applications expose the menu for closing, switching, and layout selection. The collapsed rail shows the mark while retaining the full accessible name and tooltip.
 
 An application can keep the stock DSH shell or coordinate it with the active product brand:
 

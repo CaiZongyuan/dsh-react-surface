@@ -73,6 +73,8 @@ dsh.cmd web
 
 ## Flexible Layout
 
+Sidebar 底部入口使用当前应用的标题与 identity mark；只有一个应用时，尚未打开也会显示它的名称与标识，第一次点击直接打开。应用已激活或注册多个应用时，菜单提供关闭、切换与布局选择。侧边栏折叠后只显示标识，同时保留完整可访问名称与 tooltip。
+
 ```ts
 layout: {
   default: "workspace",

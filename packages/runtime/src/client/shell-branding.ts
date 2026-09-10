@@ -18,7 +18,7 @@ const SURFACE_TOKEN_NAMES: Readonly<
   surface: "--dsh-surface-surface",
 });
 
-/** Stable Surface tokens plus the tested DSH rc.2 aliases used for shell branding. */
+/** Stable Surface tokens plus the tested DSH semantic aliases used for shell branding. */
 export function buildSurfaceBrandDeclarations(
   branding: ReactSurfaceBranding | undefined,
 ): ReadonlyMap<string, string> {
