@@ -46,7 +46,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: Install pinned DSH CLI
-        run: bun install --global @deepseek-ai/dsh@0.1.5-alpha.1
+        run: bun install --global @deepseek-ai/dsh@0.1.5-rc.1
       - name: Build source-installed packages
         run: bun run build
       - name: Verify packaged Client contracts
