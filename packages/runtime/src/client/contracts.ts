@@ -23,8 +23,8 @@ export interface ReactSurfaceLayoutConfiguration {
   resizable?: boolean;
   /** Whether layout and panel sizes are retained locally. */
   persist?: boolean;
-  /** Safe layout used when the requested split cannot fit. */
-  fallback?: "full-frame" | "center";
+  /** Safe layout when a split cannot fit. `shrink` keeps workspace columns side by side. */
+  fallback?: "full-frame" | "center" | "shrink";
   /** Minimum application width before a horizontal split falls back. */
   minSurfaceWidth?: number;
   /** Minimum application height before a vertical split falls back. */
@@ -283,7 +283,8 @@ function validateLayoutDeclaration(
   if (
     declaration.fallback !== undefined &&
     declaration.fallback !== "full-frame" &&
-    declaration.fallback !== "center"
+    declaration.fallback !== "center" &&
+    declaration.fallback !== "shrink"
   ) {
     throw new TypeError(
       `Unknown React surface fallback: ${declaration.fallback}`,
