@@ -24,6 +24,72 @@ const desktop = {
 };
 
 describe("resolveReactSurfaceLayout", () => {
+  test("keeps an opted-in workspace beside its conversation when panels cannot fit", () => {
+    for (const width of [360, 768, 1280, 2048]) {
+      const geometry = {
+        width,
+        height: 700,
+        sidebarWidth: 56,
+        detailsWidth: width * 0.3,
+      };
+      const result = resolveReactSurfaceLayout({
+        requested: "workspace",
+        configuration: {
+          ...configuration,
+          fallback: "shrink",
+          minSurfaceWidth: 360,
+        },
+        geometry,
+        preferredSizes: { conversation: 400 },
+      });
+      expect(result.resolved).toBe("workspace");
+      expect(result.bounds.left).toBe(56);
+      expect(result.bounds.top).toBe(0);
+      expect(result.bounds.bottom).toBe(0);
+      expect(result.nativePane.width).toBeGreaterThan(0);
+      expect(width - result.bounds.left - result.bounds.right).toBeGreaterThan(
+        0,
+      );
+      expect(result.bounds.right).toBe(
+        geometry.detailsWidth + result.nativePane.width!,
+      );
+    }
+  });
+
+  test("restores the preferred horizontal split after a narrow interval or manual full frame", () => {
+    const input = {
+      configuration: {
+        ...configuration,
+        fallback: "shrink" as const,
+        minSurfaceWidth: 360,
+      },
+      preferredSizes: { conversation: 375 },
+    };
+    resolveReactSurfaceLayout({
+      ...input,
+      requested: "workspace",
+      geometry: { ...desktop, width: 700 },
+    });
+    expect(
+      resolveReactSurfaceLayout({
+        ...input,
+        requested: "full-frame",
+        geometry: desktop,
+      }).resolved,
+    ).toBe("full-frame");
+    expect(
+      resolveReactSurfaceLayout({
+        ...input,
+        requested: "workspace",
+        geometry: desktop,
+      }),
+    ).toMatchObject({
+      resolved: "workspace",
+      nativePane: { width: 375 },
+      bounds: { left: 280, right: 375 },
+    });
+  });
+
   test("resolves every semantic desktop preset", () => {
     expect(
       resolveReactSurfaceLayout({

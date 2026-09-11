@@ -159,6 +159,27 @@ function workspace(
     max: 440,
   });
   const maximum = Math.min(constraint.max, available - minSurface);
+  if (maximum < constraint.min && configuration.fallback === "shrink") {
+    const conversationWidth = Math.min(
+      constraint.max,
+      Math.round((available * constraint.min) / (minSurface + constraint.min)),
+    );
+    return {
+      requested,
+      resolved: "workspace",
+      bounds: {
+        top: 0,
+        right: geometry.detailsWidth + conversationWidth,
+        bottom: 0,
+        left: geometry.sidebarWidth,
+      },
+      nativePane: {
+        width: conversationWidth,
+        justifySelf: "end",
+        borderLeft: true,
+      },
+    };
+  }
   if (maximum < constraint.min) {
     return fallback(
       requested,
