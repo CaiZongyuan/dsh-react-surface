@@ -92,6 +92,6 @@ DSH pairing authorizes entry to this bridge, not application data. Every applica
 
 ## Compatibility
 
-The current tested cohort is DSH `0.1.5-rc.1` with React `18.3.1`. Client plugins use Cordis for their context type and the DSH UI Renderer for Slot ownership; the removed Client Runtime aggregate is not part of the cohort. Runtime `version`, `interfaceVersion`, and monotonic `features` let Adapters detect capability rather than guess from package versions.
+The current tested cohort is DSH `0.1.5-rc.2` with React `18.3.1`. Client plugins use Cordis for their context type and the DSH UI Renderer for Slot ownership; the removed Client Runtime aggregate is not part of the cohort. Runtime `version`, `interfaceVersion`, and monotonic `features` let Adapters detect capability rather than guess from package versions.
 
 Any future DSH cohort change requires unit tests, packaged artifact checks, and a real browser mount before its compatibility claim is updated.
