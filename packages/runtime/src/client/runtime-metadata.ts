@@ -3,6 +3,7 @@ export const REACT_SURFACE_RUNTIME_VERSION = "0.0.1";
 
 export const REACT_SURFACE_FEATURES = Object.freeze([
   "agent-tools-v1",
+  "conversation-collapse-v1",
   "diagnostics-v1",
   "lazy-mount-v1",
   "layout-preferences-v1",

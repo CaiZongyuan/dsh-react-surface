@@ -126,6 +126,8 @@ export interface ReactSurfaceProps {
   capabilities: ReactSurfaceCapabilities;
   /** Layout currently selected for this Surface. */
   layout: ReactSurfaceLayout;
+  /** In-memory workspace conversation visibility, retained across layout changes. */
+  conversationCollapsed: boolean;
   /** Return to the native DSH workspace. */
   close(): void;
   /** Change this Surface's application-owned location. */
@@ -160,6 +162,7 @@ export interface RegisteredReactSurface {
   readonly location: string;
   readonly layout: ReactSurfaceLayout;
   readonly mounted: boolean;
+  readonly conversationCollapsed: boolean;
 }
 
 export interface ReactSurfaceShellDiagnostics {
@@ -216,6 +219,8 @@ export interface ReactSurfaceRegistry {
   navigate(location: string): void;
   /** Select one of the layouts declared by a Surface. */
   setLayout(id: string, layout: ReactSurfaceLayout): void;
+  /** Hide or restore the workspace conversation and its details without closing either. */
+  setConversationCollapsed(id: string, collapsed: boolean): void;
   /** Clear retained UI-only layout preferences. */
   resetPreferences(id?: string): void;
   /** Produce a local-only diagnostic report without application data. */

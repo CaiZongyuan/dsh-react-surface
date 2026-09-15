@@ -24,6 +24,40 @@ const desktop = {
 };
 
 describe("resolveReactSurfaceLayout", () => {
+  test("collapses the conversation and its details without covering navigation or losing split width", () => {
+    const input = {
+      requested: "workspace" as const,
+      configuration: { ...configuration, fallback: "shrink" as const },
+      geometry: { ...desktop, detailsWidth: 300 },
+      preferredSizes: { conversation: 375 },
+    };
+    const expanded = resolveReactSurfaceLayout(input);
+    const collapsed = resolveReactSurfaceLayout({
+      ...input,
+      conversationCollapsed: true,
+    });
+    expect(collapsed.resolved).toBe("workspace");
+    expect(collapsed.bounds).toEqual({
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 280,
+    });
+    expect(collapsed.nativePane).toEqual({
+      ...expanded.nativePane,
+      hidden: true,
+    });
+    expect(collapsed.resize).toBeUndefined();
+    expect(resolveReactSurfaceLayout(input)).toEqual(expanded);
+    expect(
+      resolveReactSurfaceLayout({
+        ...input,
+        conversationCollapsed: true,
+        geometry: { ...desktop, width: 360 },
+      }).bounds.left,
+    ).toBe(280);
+  });
+
   test("keeps an opted-in workspace beside its conversation when panels cannot fit", () => {
     for (const width of [360, 768, 1280, 2048]) {
       const geometry = {

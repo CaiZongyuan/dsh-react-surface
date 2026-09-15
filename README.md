@@ -111,6 +111,8 @@ The package manifest must declare the same Surface id under `dsh.reactSurface.id
 
 ## Brand The Shell
 
+For workspace layouts, `ctx.reactSurfaces.setConversationCollapsed(id, collapsed)` hides or restores the native conversation together with its details panel while keeping the sidebar usable. `ReactSurfaceProps.conversationCollapsed` and the registered Surface snapshot expose the state. It starts expanded, stays in memory across layout changes and Surface close/open, and resets on unregister. Full-frame ignores the flag visually without changing it; returning to workspace restores the selection. No native session, file selection, task, or panel-width preference is closed or reset. The runtime advertises `conversation-collapse-v1` for capability detection.
+
 The Sidebar action uses the active Surface's title and identity mark, or the sole registered application's identity before it is opened. One inactive Surface opens on the first click. An active Surface or multiple registered applications expose the menu for closing, switching, and layout selection. The collapsed rail shows the mark while retaining the full accessible name and tooltip.
 
 An application can keep the stock DSH shell or coordinate it with the active product brand:
