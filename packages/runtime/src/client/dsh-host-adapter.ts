@@ -20,6 +20,7 @@ interface ShellElements {
   sidebar: HTMLElement;
   conversation: HTMLElement;
   details: HTMLElement | null;
+  floatingDetails: HTMLElement[];
 }
 
 export interface DshShellActivationOptions {
@@ -121,6 +122,9 @@ export function activateDshShell({
       subtree: true,
     });
     ledger.record(activationId, () => mutationObserver?.disconnect());
+    const portalsObserver = new MutationObserver(scheduleUpdate);
+    portalsObserver.observe(layer.ownerDocument.body, { childList: true });
+    ledger.record(activationId, () => portalsObserver.disconnect());
   }
   const unsubscribePreferences = preferences.subscribe(scheduleUpdate);
   ledger.record(activationId, unsubscribePreferences);
@@ -197,7 +201,12 @@ function locateShellElements(layer: HTMLElement): ShellElements | null {
     ) ??
     null;
   if (!sidebar || !conversation) return null;
-  return { frame, overlay, sidebar, conversation, details };
+  const floatingDetails = Array.from(
+    layer.ownerDocument.querySelectorAll<HTMLElement>(
+      "[data-sidebar-right-float-host]",
+    ),
+  );
+  return { frame, overlay, sidebar, conversation, details, floatingDetails };
 }
 
 function directFrameChild(
@@ -220,7 +229,12 @@ function sameShellElements(
     left?.overlay === right?.overlay &&
     left?.sidebar === right?.sidebar &&
     left?.conversation === right?.conversation &&
-    left?.details === right?.details
+    left?.details === right?.details &&
+    left?.floatingDetails.length === right?.floatingDetails.length &&
+    (left?.floatingDetails.every(
+      (element, index) => element === right?.floatingDetails[index],
+    ) ??
+      true)
   );
 }
 
@@ -251,11 +265,13 @@ function applyBounds(
 
 class ShellPatch {
   readonly #frame: OwnedElementPatch;
+  readonly #overlay: OwnedElementPatch;
   readonly #conversation: OwnedElementPatch;
   readonly #inert = new Map<HTMLElement, OwnedElementPatch>();
 
   constructor(private readonly elements: ShellElements) {
     this.#frame = new OwnedElementPatch(elements.frame);
+    this.#overlay = new OwnedElementPatch(elements.overlay);
     this.#conversation = new OwnedElementPatch(elements.conversation);
   }
 
@@ -270,6 +286,8 @@ class ShellPatch {
       resolution.resolved,
     );
     applyBrand(this.#frame, branding, branding?.shell === "surface");
+    // DSH 0.1.5-rc.2 files use layers 40 (fullscreen) and 60 (floating).
+    this.#overlay.setStyle("z-index", "70");
 
     const pane = resolution.nativePane;
     this.#conversation.setStyle(
@@ -303,11 +321,13 @@ class ShellPatch {
             this.elements.sidebar,
             this.elements.conversation,
             ...(this.elements.details ? [this.elements.details] : []),
+            ...this.elements.floatingDetails,
           ]
         : resolution.resolved === "center" || pane.hidden
           ? [
               this.elements.conversation,
               ...(this.elements.details ? [this.elements.details] : []),
+              ...this.elements.floatingDetails,
             ]
           : [];
     const nextInert = new Set(inertElements);
@@ -334,6 +354,7 @@ class ShellPatch {
     for (const patch of this.#inert.values()) patch.dispose();
     this.#inert.clear();
     this.#conversation.dispose();
+    this.#overlay.dispose();
     this.#frame.dispose();
   }
 }
