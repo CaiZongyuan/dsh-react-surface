@@ -265,13 +265,11 @@ function applyBounds(
 
 class ShellPatch {
   readonly #frame: OwnedElementPatch;
-  readonly #overlay: OwnedElementPatch;
   readonly #conversation: OwnedElementPatch;
   readonly #inert = new Map<HTMLElement, OwnedElementPatch>();
 
   constructor(private readonly elements: ShellElements) {
     this.#frame = new OwnedElementPatch(elements.frame);
-    this.#overlay = new OwnedElementPatch(elements.overlay);
     this.#conversation = new OwnedElementPatch(elements.conversation);
   }
 
@@ -286,8 +284,6 @@ class ShellPatch {
       resolution.resolved,
     );
     applyBrand(this.#frame, branding, branding?.shell === "surface");
-    // DSH 0.1.5-rc.2 files use layers 40 (fullscreen) and 60 (floating).
-    this.#overlay.setStyle("z-index", "70");
 
     const pane = resolution.nativePane;
     this.#conversation.setStyle(
@@ -354,7 +350,6 @@ class ShellPatch {
     for (const patch of this.#inert.values()) patch.dispose();
     this.#inert.clear();
     this.#conversation.dispose();
-    this.#overlay.dispose();
     this.#frame.dispose();
   }
 }
