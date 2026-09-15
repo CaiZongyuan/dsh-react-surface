@@ -93,6 +93,7 @@ export function ReactSurfaceHost({ registry }: ReactSurfaceHostProps) {
   );
   const activeId = activeSurface?.definition.id ?? null;
   const activeLayout = activeSurface?.layout ?? null;
+  const conversationCollapsed = activeSurface?.conversationCollapsed ?? false;
   const activeDefinition = activeSurface?.definition;
 
   useEffect(() => {
@@ -126,6 +127,7 @@ export function ReactSurfaceHost({ registry }: ReactSurfaceHostProps) {
       surfaceId: activeDefinition.id,
       layer,
       requestedLayout: activeLayout,
+      conversationCollapsed,
       configuration: getReactSurfaceLayoutConfiguration(activeDefinition),
       ...(activeDefinition.branding === undefined
         ? {}
@@ -149,7 +151,7 @@ export function ReactSurfaceHost({ registry }: ReactSurfaceHostProps) {
       activationRef.current = null;
       activation.dispose();
     };
-  }, [activeDefinition, activeLayout, registry]);
+  }, [activeDefinition, activeLayout, conversationCollapsed, registry]);
 
   const resize = activeId === null ? undefined : resolution?.resize;
 
@@ -166,12 +168,13 @@ export function ReactSurfaceHost({ registry }: ReactSurfaceHostProps) {
     >
       {snapshot.surfaces
         .filter(({ mounted }) => mounted)
-        .map(({ definition, layout, location }) => (
+        .map(({ definition, layout, location, conversationCollapsed }) => (
           <ShadowSurface
             key={definition.id}
             definition={definition}
             location={location}
             layout={layout}
+            conversationCollapsed={conversationCollapsed}
             active={activeId === definition.id}
             registry={registry}
           />
@@ -287,6 +290,7 @@ function SurfaceResizeHandle({
 }
 
 interface ShadowSurfaceProps {
+  conversationCollapsed: boolean;
   definition: Readonly<ReactSurfaceDefinition>;
   location: string;
   layout: import("./contracts.ts").ReactSurfaceLayout;
@@ -298,6 +302,7 @@ function ShadowSurface({
   definition,
   location,
   layout,
+  conversationCollapsed,
   active,
   registry,
 }: ShadowSurfaceProps) {
@@ -343,6 +348,7 @@ function ShadowSurface({
                     agent={agent}
                     capabilities={registry.getSnapshot().runtime.capabilities}
                     layout={layout}
+                    conversationCollapsed={conversationCollapsed}
                     location={location}
                     portalRoot={portalRoot}
                     close={() => registry.close()}

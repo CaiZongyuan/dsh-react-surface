@@ -40,6 +40,7 @@ export class ReactSurfaceRegistryImpl implements ReactSurfaceRegistry {
   readonly #locations = new Map<string, string>();
   readonly #layouts = new Map<string, ReactSurfaceLayout>();
   readonly #mounted = new Set<string>();
+  readonly #collapsedConversations = new Set<string>();
   readonly #agents = new Map<string, ReactSurfaceAgentRegistration>();
   readonly #listeners = new Set<() => void>();
   readonly #preferences: ReactSurfacePreferenceStore;
@@ -96,6 +97,7 @@ export class ReactSurfaceRegistryImpl implements ReactSurfaceRegistry {
       this.#locations.delete(normalized.id);
       this.#layouts.delete(normalized.id);
       this.#mounted.delete(normalized.id);
+      this.#collapsedConversations.delete(normalized.id);
       this.#agents.delete(normalized.id);
       if (this.#activeId === normalized.id) this.#activeId = null;
       this.#publish();
@@ -184,6 +186,15 @@ export class ReactSurfaceRegistryImpl implements ReactSurfaceRegistry {
     if (this.#layouts.get(id) === layout) return;
     this.#layouts.set(id, layout);
     if (configuration.persist) this.#preferences.setLayout(id, layout);
+    this.#publish();
+  }
+
+  setConversationCollapsed(id: string, collapsed: boolean): void {
+    if (!this.#definitions.has(id))
+      throw new RangeError(`Unknown React surface: ${id}`);
+    if (this.#collapsedConversations.has(id) === collapsed) return;
+    if (collapsed) this.#collapsedConversations.add(id);
+    else this.#collapsedConversations.delete(id);
     this.#publish();
   }
 
@@ -282,6 +293,9 @@ export class ReactSurfaceRegistryImpl implements ReactSurfaceRegistry {
             this.#layouts.get(definition.id) ??
             getReactSurfaceLayoutConfiguration(definition).default,
           mounted: this.#mounted.has(definition.id),
+          conversationCollapsed: this.#collapsedConversations.has(
+            definition.id,
+          ),
         }),
     ).sort(compareSurfaces);
 

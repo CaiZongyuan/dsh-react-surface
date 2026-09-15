@@ -23,6 +23,7 @@ interface ShellElements {
 }
 
 export interface DshShellActivationOptions {
+  conversationCollapsed?: boolean;
   surfaceId: string;
   layer: HTMLDivElement;
   requestedLayout: ReactSurfaceLayout;
@@ -46,6 +47,7 @@ export function activateDshShell({
   surfaceId,
   layer,
   requestedLayout,
+  conversationCollapsed = false,
   configuration,
   branding,
   preferences,
@@ -153,6 +155,7 @@ export function activateDshShell({
     const detailsRect = shell.details?.getBoundingClientRect();
     return resolveReactSurfaceLayout({
       requested: requestedLayout,
+      conversationCollapsed,
       configuration,
       geometry: {
         width: overlayRect.width,
@@ -301,7 +304,7 @@ class ShellPatch {
             this.elements.conversation,
             ...(this.elements.details ? [this.elements.details] : []),
           ]
-        : resolution.resolved === "center"
+        : resolution.resolved === "center" || pane.hidden
           ? [
               this.elements.conversation,
               ...(this.elements.details ? [this.elements.details] : []),
@@ -321,6 +324,9 @@ class ShellPatch {
       }
       patch.setInert(true);
       patch.setAttribute("aria-hidden", "true");
+      patch.setStyle("visibility", "hidden");
+      // Native file panels explicitly restore visibility, including fixed fullscreen children.
+      patch.setStyle("opacity", "0");
     }
   }
 
