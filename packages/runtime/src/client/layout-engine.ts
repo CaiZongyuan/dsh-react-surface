@@ -25,6 +25,8 @@ export interface ReactSurfaceBounds {
 }
 
 export interface ReactSurfaceNativePaneLayout {
+  /** Hide the conversation and its details while preserving their mounted state. */
+  hidden?: boolean;
   width?: number;
   height?: number;
   justifySelf?: "start" | "end";
@@ -52,6 +54,7 @@ export interface ReactSurfaceLayoutResolution {
 }
 
 export interface ResolveReactSurfaceLayoutInput {
+  conversationCollapsed?: boolean;
   requested: ReactSurfaceLayout;
   configuration: ReactSurfaceLayoutConfiguration;
   geometry: ReactSurfaceShellGeometry;
@@ -64,6 +67,7 @@ export function resolveReactSurfaceLayout({
   configuration,
   geometry,
   preferredSizes = {},
+  conversationCollapsed = false,
 }: ResolveReactSurfaceLayoutInput): ReactSurfaceLayoutResolution {
   const cleanGeometry = {
     width: Math.max(0, geometry.width),
@@ -77,13 +81,26 @@ export function resolveReactSurfaceLayout({
       return fullFrame(requested);
     case "center":
       return center(requested, configuration, cleanGeometry);
-    case "workspace":
-      return workspace(
+    case "workspace": {
+      const expanded = workspace(
         requested,
         configuration,
         cleanGeometry,
         preferredSizes.conversation,
       );
+      if (!conversationCollapsed) return expanded;
+      return {
+        requested,
+        resolved: "workspace",
+        bounds: {
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: cleanGeometry.sidebarWidth,
+        },
+        nativePane: { ...expanded.nativePane, hidden: true },
+      };
+    }
     case "right-panel":
       return rightPanel(
         requested,

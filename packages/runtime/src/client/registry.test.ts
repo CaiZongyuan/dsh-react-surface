@@ -19,6 +19,42 @@ function surface(id: string, title = id, order?: number) {
 }
 
 describe("ReactSurfaceRegistryImpl", () => {
+  test("retains conversation collapse across fullscreen and close without changing preferences", () => {
+    const registry = new ReactSurfaceRegistryImpl();
+    const definition = {
+      ...surface("work"),
+      layout: {
+        default: "workspace" as const,
+        supported: ["workspace", "full-frame"] as const,
+      },
+    };
+    const unregister = registry.register(definition);
+    registry.open("work");
+    registry.preferences.setSize("work", "conversation", 392);
+    expect(registry.getSnapshot().surfaces[0]?.conversationCollapsed).toBe(
+      false,
+    );
+    registry.setConversationCollapsed("work", true);
+    registry.setLayout("work", "full-frame");
+    registry.setLayout("work", "workspace");
+    registry.close();
+    registry.open("work");
+    expect(registry.getSnapshot().surfaces[0]).toMatchObject({
+      conversationCollapsed: true,
+      mounted: true,
+      layout: "workspace",
+    });
+    expect(registry.preferences.get("work").sizes.conversation).toBe(392);
+    unregister();
+    registry.register(definition);
+    expect(registry.getSnapshot().surfaces[0]?.conversationCollapsed).toBe(
+      false,
+    );
+    expect(() => registry.setConversationCollapsed("missing", true)).toThrow(
+      "Unknown React surface",
+    );
+  });
+
   test("registers surfaces in stable display order", () => {
     const registry = new ReactSurfaceRegistryImpl();
     registry.register(surface("zeta", "Zeta", 20));

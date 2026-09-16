@@ -13,6 +13,10 @@ import { activateSurfaceBrandSlots } from "./brand-slots.tsx";
 import { ReactSurfaceRegistryImpl } from "./registry.ts";
 import { ReactSurfaceHost } from "./surface-host.tsx";
 import { SurfaceLauncher } from "./surface-launcher.tsx";
+import {
+  NativeFileWidth,
+  type NativeLayoutProps,
+} from "./native-file-width.tsx";
 
 export type {
   ReactSurfaceDefinition,
@@ -69,7 +73,18 @@ export function apply(ctx: ClientContext): void {
   const registry = new ReactSurfaceRegistryImpl(
     createBrowserSurfacePreferences(),
   );
-  const SurfaceHostEntry = () => <ReactSurfaceHost registry={registry} />;
+  const SurfaceHostEntry = (props: NativeLayoutProps) => (
+    <>
+      {typeof props.useStore === "function" && (
+        <NativeFileWidth
+          {...props}
+          registry={registry}
+          useStore={props.useStore}
+        />
+      )}
+      <ReactSurfaceHost registry={registry} />
+    </>
+  );
   const SurfaceLauncherEntry = ({ wide }: SidebarFooterActionOwnerProps) => (
     <SurfaceLauncher registry={registry} wide={wide} />
   );
@@ -101,6 +116,7 @@ export function apply(ctx: ClientContext): void {
           id: "dsh-react-surface-host",
           order: 100,
           label: "React application surfaces",
+          store: ctx.slots.entries?.("root")[0]?.store,
         },
         SurfaceHostEntry,
       ),

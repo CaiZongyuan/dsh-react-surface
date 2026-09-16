@@ -20,9 +20,11 @@ interface ShellElements {
   sidebar: HTMLElement;
   conversation: HTMLElement;
   details: HTMLElement | null;
+  floatingDetails: HTMLElement[];
 }
 
 export interface DshShellActivationOptions {
+  conversationCollapsed?: boolean;
   surfaceId: string;
   layer: HTMLDivElement;
   requestedLayout: ReactSurfaceLayout;
@@ -46,6 +48,7 @@ export function activateDshShell({
   surfaceId,
   layer,
   requestedLayout,
+  conversationCollapsed = false,
   configuration,
   branding,
   preferences,
@@ -119,6 +122,9 @@ export function activateDshShell({
       subtree: true,
     });
     ledger.record(activationId, () => mutationObserver?.disconnect());
+    const portalsObserver = new MutationObserver(scheduleUpdate);
+    portalsObserver.observe(layer.ownerDocument.body, { childList: true });
+    ledger.record(activationId, () => portalsObserver.disconnect());
   }
   const unsubscribePreferences = preferences.subscribe(scheduleUpdate);
   ledger.record(activationId, unsubscribePreferences);
@@ -153,6 +159,7 @@ export function activateDshShell({
     const detailsRect = shell.details?.getBoundingClientRect();
     return resolveReactSurfaceLayout({
       requested: requestedLayout,
+      conversationCollapsed,
       configuration,
       geometry: {
         width: overlayRect.width,
@@ -194,7 +201,12 @@ function locateShellElements(layer: HTMLElement): ShellElements | null {
     ) ??
     null;
   if (!sidebar || !conversation) return null;
-  return { frame, overlay, sidebar, conversation, details };
+  const floatingDetails = Array.from(
+    layer.ownerDocument.querySelectorAll<HTMLElement>(
+      "[data-sidebar-right-float-host]",
+    ),
+  );
+  return { frame, overlay, sidebar, conversation, details, floatingDetails };
 }
 
 function directFrameChild(
@@ -217,7 +229,12 @@ function sameShellElements(
     left?.overlay === right?.overlay &&
     left?.sidebar === right?.sidebar &&
     left?.conversation === right?.conversation &&
-    left?.details === right?.details
+    left?.details === right?.details &&
+    left?.floatingDetails.length === right?.floatingDetails.length &&
+    (left?.floatingDetails.every(
+      (element, index) => element === right?.floatingDetails[index],
+    ) ??
+      true)
   );
 }
 
@@ -300,11 +317,13 @@ class ShellPatch {
             this.elements.sidebar,
             this.elements.conversation,
             ...(this.elements.details ? [this.elements.details] : []),
+            ...this.elements.floatingDetails,
           ]
-        : resolution.resolved === "center"
+        : resolution.resolved === "center" || pane.hidden
           ? [
               this.elements.conversation,
               ...(this.elements.details ? [this.elements.details] : []),
+              ...this.elements.floatingDetails,
             ]
           : [];
     const nextInert = new Set(inertElements);
@@ -321,6 +340,9 @@ class ShellPatch {
       }
       patch.setInert(true);
       patch.setAttribute("aria-hidden", "true");
+      patch.setStyle("visibility", "hidden");
+      // Native file panels explicitly restore visibility, including fixed fullscreen children.
+      patch.setStyle("opacity", "0");
     }
   }
 
