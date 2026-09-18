@@ -29,6 +29,8 @@ export interface ReactSurfaceLayoutConfiguration {
   minSurfaceWidth?: number;
   /** Minimum application height before a vertical split falls back. */
   minSurfaceHeight?: number;
+  /** Keep the native DSH details column visible and interactive in the full-frame preset. */
+  fullFrameKeepDetails?: boolean;
   /** Native DSH conversation width in the workspace preset. */
   conversation?: ReactSurfaceSizeConstraint;
   /** Application panel width in the right-panel preset. */

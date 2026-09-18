@@ -428,7 +428,9 @@ class ShellPatch {
         ? [
             this.elements.sidebar,
             this.elements.conversation,
-            ...(this.elements.details ? [this.elements.details] : []),
+            ...(resolution.keepDetails === true || !this.elements.details
+              ? []
+              : [this.elements.details]),
             ...this.elements.floatingDetails,
           ]
         : resolution.resolved === "center" || pane.hidden

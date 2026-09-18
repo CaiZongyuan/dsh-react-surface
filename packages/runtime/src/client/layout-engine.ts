@@ -50,6 +50,8 @@ export interface ReactSurfaceLayoutResolution {
   bounds: ReactSurfaceBounds;
   nativePane: ReactSurfaceNativePaneLayout;
   resize?: ReactSurfaceResizeDescriptor;
+  /** Full-frame preset keeps the native details column beside the surface. */
+  keepDetails?: boolean;
   reason?: string;
 }
 
@@ -78,7 +80,7 @@ export function resolveReactSurfaceLayout({
 
   switch (requested) {
     case "full-frame":
-      return fullFrame(requested);
+      return fullFrame(requested, configuration, cleanGeometry);
     case "center":
       return center(requested, configuration, cleanGeometry);
     case "workspace": {
@@ -120,13 +122,25 @@ export function resolveReactSurfaceLayout({
 
 function fullFrame(
   requested: ReactSurfaceLayout,
+  configuration: ReactSurfaceLayoutConfiguration,
+  geometry: ReactSurfaceShellGeometry,
   reason?: string,
 ): ReactSurfaceLayoutResolution {
+  const keepDetails =
+    configuration.fullFrameKeepDetails === true &&
+    geometry.width - geometry.detailsWidth >=
+      (configuration.minSurfaceWidth ?? DEFAULT_MIN_SURFACE_WIDTH);
   return {
     requested,
     resolved: "full-frame",
-    bounds: { top: 0, right: 0, bottom: 0, left: 0 },
+    bounds: {
+      top: 0,
+      right: keepDetails ? geometry.detailsWidth : 0,
+      bottom: 0,
+      left: 0,
+    },
     nativePane: {},
+    ...(keepDetails ? { keepDetails } : {}),
     ...(reason === undefined ? {} : { reason }),
   };
 }
@@ -142,6 +156,8 @@ function center(
   if (geometry.width - geometry.sidebarWidth < minSurfaceWidth) {
     return fullFrame(
       requested,
+      configuration,
+      geometry,
       reason ?? "The center Surface is narrower than its minimum width",
     );
   }
@@ -369,7 +385,7 @@ function fallback(
 ): ReactSurfaceLayoutResolution {
   return configuration.fallback === "center"
     ? center(requested, configuration, geometry, reason)
-    : fullFrame(requested, reason);
+    : fullFrame(requested, configuration, geometry, reason);
 }
 
 function normalizeConstraint(

@@ -218,4 +218,52 @@ describe("resolveReactSurfaceLayout", () => {
     });
     expect(result.reason).toContain("right panel");
   });
+
+  test("keeps the native details column beside a full-frame surface when opted in", () => {
+    const geometry = { ...desktop, detailsWidth: 300 };
+    const optedIn = resolveReactSurfaceLayout({
+      requested: "full-frame",
+      configuration: { ...configuration, fullFrameKeepDetails: true },
+      geometry,
+    });
+    expect(optedIn.resolved).toBe("full-frame");
+    expect(optedIn.keepDetails).toBe(true);
+    expect(optedIn.bounds).toEqual({
+      top: 0,
+      right: 300,
+      bottom: 0,
+      left: 0,
+    });
+    // 右栏不存在(detailsWidth 为 0)时仍是纯全屏
+    expect(
+      resolveReactSurfaceLayout({
+        requested: "full-frame",
+        configuration: { ...configuration, fullFrameKeepDetails: true },
+        geometry: desktop,
+      }),
+    ).toMatchObject({ resolved: "full-frame", bounds: { right: 0 } });
+    // 未声明配置时不让位、不带标记
+    const optedOut = resolveReactSurfaceLayout({
+      requested: "full-frame",
+      configuration,
+      geometry,
+    });
+    expect(optedOut.keepDetails).toBeUndefined();
+    expect(optedOut.bounds.right).toBe(0);
+  });
+
+  test("degrades full-frame keep-details back to a full overlay below the minimum surface width", () => {
+    const result = resolveReactSurfaceLayout({
+      requested: "full-frame",
+      configuration: {
+        ...configuration,
+        fullFrameKeepDetails: true,
+        minSurfaceWidth: 360,
+      },
+      geometry: { width: 600, height: 700, sidebarWidth: 0, detailsWidth: 300 },
+    });
+    expect(result.resolved).toBe("full-frame");
+    expect(result.keepDetails).toBeUndefined();
+    expect(result.bounds.right).toBe(0);
+  });
 });
