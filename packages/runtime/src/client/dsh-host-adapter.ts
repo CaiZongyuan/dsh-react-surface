@@ -43,6 +43,61 @@ export interface DshShellActivation {
   dispose(): void;
 }
 
+/**
+ * Duration of the collapse/expand transition applied to the surface layer
+ * (left/right insets) and the conversation pane (opacity/visibility fade).
+ */
+const CONVERSATION_TRANSITION_MS = 400;
+const PANE_TRANSITION_MS = 320;
+const TRANSITION_STYLE_ID = "dsh-react-surface-transition-style";
+const TRANSITION_STYLE_TEXT = `
+@media (prefers-reduced-motion: no-preference) {
+  [data-dsh-react-surface-animating="layer"] {
+    transition:
+      left ${CONVERSATION_TRANSITION_MS}ms cubic-bezier(0.2, 0, 0, 1),
+      right ${CONVERSATION_TRANSITION_MS}ms cubic-bezier(0.2, 0, 0, 1);
+  }
+  [data-dsh-react-surface-animating="pane"] {
+    transition:
+      opacity ${PANE_TRANSITION_MS}ms ease,
+      visibility ${PANE_TRANSITION_MS}ms ease;
+  }
+}
+`;
+
+/**
+ * Toggle-scoped transitions only: the animating attributes are mounted for a
+ * short window around a conversationCollapsed flip and removed afterwards, so
+ * continuous bounds changes (window resize, drag-resize, dockkit column
+ * changes) keep snapping instantly instead of trailing the pointer.
+ */
+function ensureTransitionStyle(document: Document): void {
+  if (document.getElementById(TRANSITION_STYLE_ID) !== null) return;
+  const style = document.createElement("style");
+  style.id = TRANSITION_STYLE_ID;
+  style.textContent = TRANSITION_STYLE_TEXT;
+  document.head.append(style);
+}
+
+/**
+ * Last applied conversationCollapsed per surface layer. Activations are fully
+ * recreated on every collapsed flip (surface-host layout effect deps), so the
+ * flip is only visible across activations through this module-level map.
+ */
+const collapsedByLayer = new WeakMap<HTMLElement, boolean>();
+
+/**
+ * Last applied layer bounds per surface layer. A new activation must restore
+ * them before its first forced style recalc (resolveForElements measures the
+ * shell): the old activation's dispose already removed the bounds inline
+ * styles, and a recalc in between would make the transition start value
+ * `auto`, which is not interpolable — collapsing would snap instead of slide.
+ */
+const lastBoundsByLayer = new WeakMap<
+  HTMLElement,
+  ReactSurfaceLayoutResolution["bounds"]
+>();
+
 /** Own every DSH DOM effect created by one active Surface. */
 export function activateDshShell({
   surfaceId,
@@ -62,13 +117,58 @@ export function activateDshShell({
   let resizeObserver: ResizeObserver | undefined;
   let mutationObserver: MutationObserver | undefined;
   let animationFrame = 0;
+  let transitionWindow = 0;
   let disposed = false;
   let lastResolutionKey = "";
   const transientSizes = { ...preferences.get(surfaceId).sizes };
 
+  ensureTransitionStyle(layer.ownerDocument);
+
+  /** Mount the animating attributes for one collapse/expand transition window. */
+  const armConversationTransition = (toCollapsed: boolean): void => {
+    layerPatch.setAttribute("data-dsh-react-surface-animating", "layer");
+    shellPatch?.setAnimating("pane");
+    if (!toCollapsed && shellPatch && elements) {
+      // Expand direction: the old activation's dispose already removed the
+      // pane's masking styles, so a plain fade-in has no start value. Mask the
+      // pane again, force one style recalc, then release it — the opacity
+      // transition now animates from 0 instead of snapping to visible.
+      const paneFade = new OwnedElementPatch(elements.conversation);
+      paneFade.setStyle("visibility", "hidden");
+      paneFade.setStyle("opacity", "0");
+      void elements.conversation.offsetWidth;
+      paneFade.setStyle("visibility", undefined);
+      paneFade.setStyle("opacity", undefined);
+      paneFade.dispose();
+    }
+    if (transitionWindow !== 0) window.clearTimeout(transitionWindow);
+    transitionWindow = window.setTimeout(() => {
+      transitionWindow = 0;
+      layerPatch.setAttribute("data-dsh-react-surface-animating", undefined);
+      shellPatch?.setAnimating(undefined);
+    }, CONVERSATION_TRANSITION_MS + 40);
+  };
+  const disarmConversationTransition = (): void => {
+    if (transitionWindow !== 0) window.clearTimeout(transitionWindow);
+    transitionWindow = 0;
+    layerPatch.setAttribute("data-dsh-react-surface-animating", undefined);
+    shellPatch?.setAnimating(undefined);
+  };
+
   applyBrand(layerPatch, branding, false);
   layerPatch.setAttribute("data-dsh-react-surface-active", surfaceId);
   ledger.record(activationId, () => layerPatch.dispose());
+  ledger.record(activationId, disarmConversationTransition);
+
+  // Restore the previous activation's layer bounds before anything can force
+  // a style recalc — see lastBoundsByLayer for why this keeps slides animated.
+  const lastBounds = lastBoundsByLayer.get(layer);
+  if (lastBounds) {
+    layerPatch.setStyle("top", `${lastBounds.top}px`);
+    layerPatch.setStyle("right", `${lastBounds.right}px`);
+    layerPatch.setStyle("bottom", `${lastBounds.bottom}px`);
+    layerPatch.setStyle("left", `${lastBounds.left}px`);
+  }
 
   const update = () => {
     animationFrame = 0;
@@ -92,9 +192,21 @@ export function activateDshShell({
     const resolution = elements
       ? resolveForElements(elements)
       : unavailableResolution(requestedLayout);
+    // Detect the collapsed flip across activation recreation: on a flip the
+    // animating attributes must land in the DOM before the new bounds/pane
+    // styles are applied, so the browser recalc sees both and interpolates.
+    const previousCollapsed = collapsedByLayer.get(layer);
+    collapsedByLayer.set(layer, conversationCollapsed);
+    if (
+      previousCollapsed !== undefined &&
+      previousCollapsed !== conversationCollapsed
+    ) {
+      armConversationTransition(conversationCollapsed);
+    }
     shellPatch?.apply(resolution, surfaceId, branding);
     layerPatch.setAttribute("data-surface-layout", resolution.resolved);
     applyBounds(layerPatch, resolution);
+    lastBoundsByLayer.set(layer, { ...resolution.bounds });
 
     const resolutionKey = JSON.stringify(resolution);
     if (resolutionKey !== lastResolutionKey) {
@@ -344,6 +456,15 @@ class ShellPatch {
       // Native file panels explicitly restore visibility, including fixed fullscreen children.
       patch.setStyle("opacity", "0");
     }
+  }
+
+  /**
+   * Toggle the collapse/expand transition marker on the conversation element.
+   * The attribute only has effect while the document-level transition style
+   * sheet is present; passing undefined removes it.
+   */
+  setAnimating(value: "pane" | undefined): void {
+    this.#conversation.setAttribute("data-dsh-react-surface-animating", value);
   }
 
   dispose(): void {
