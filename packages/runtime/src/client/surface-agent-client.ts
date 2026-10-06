@@ -22,10 +22,12 @@ interface ActiveLease {
   readonly poll: AbortController;
 }
 
-export interface ClientSessionsPort {
-  readonly list: {
-    getSnapshot(): { current: string | undefined };
-    subscribe(listener: () => void): () => void;
+export interface ClientSessionBindingPort {
+  readonly adapter: {
+    readonly current: {
+      getSnapshot(): { key: string | undefined };
+      subscribe(listener: () => void): () => void;
+    };
   };
 }
 
@@ -62,7 +64,7 @@ export class SurfaceAgentClientBridge {
   readonly #clientId = `client-${crypto.randomUUID()}`;
   readonly #unsubscribeRegistry: () => void;
   readonly #unsubscribeSessions: () => void;
-  readonly #sessions: ClientSessionsPort;
+  readonly #sessionBinding: ClientSessionBindingPort;
   #active: ActiveLease | null = null;
   #leadership: Leadership | null = null;
   #availability: boolean | null = null;
@@ -75,13 +77,13 @@ export class SurfaceAgentClientBridge {
   #disposed = false;
 
   constructor(
-    sessions: ClientSessionsPort,
+    sessionBinding: ClientSessionBindingPort,
     private readonly registry: ReactSurfaceRegistryImpl,
   ) {
-    this.#sessions = sessions;
+    this.#sessionBinding = sessionBinding;
     this.#unsubscribeRegistry = registry.subscribe(() => this.#scheduleSync());
-    this.#unsubscribeSessions = this.#sessions.list.subscribe(() =>
-      this.#scheduleSync(),
+    this.#unsubscribeSessions = this.#sessionBinding.adapter.current.subscribe(
+      () => this.#scheduleSync(),
     );
     this.#scheduleSync();
   }
@@ -125,7 +127,7 @@ export class SurfaceAgentClientBridge {
   async #sync(generation: number): Promise<void> {
     const snapshot = this.registry.getSnapshot();
     const surfaceId = snapshot.activeId;
-    const sessionId = this.#sessions.list.getSnapshot().current;
+    const sessionId = this.#sessionBinding.adapter.current.getSnapshot().key;
     const registration = surfaceId
       ? this.registry.getAgentRegistration(surfaceId)
       : undefined;

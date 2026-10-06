@@ -6,6 +6,8 @@
 
 仓库目前面向 DeepSeek Harness `0.2.0-rc.2`，暂时通过 GitHub 源码安装，尚未发布 npm 版本。
 
+可选 Agent 桥接订阅 DSH 0.2 公开的 `uiSession.adapter.current` 绑定。选择、切换或清除主会话时同步更新能力租约；绑定服务不可用时 Surface 页面仍可使用。
+
 ## 核心能力
 
 - 使用一个类型化的 `defineReactSurface(...)` 接入 Vite React 或 Next.js Client Component。

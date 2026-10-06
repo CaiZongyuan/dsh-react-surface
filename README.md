@@ -6,6 +6,8 @@ English | [简体中文](README.zh.md)
 
 The repository currently targets DeepSeek Harness `0.2.0-rc.2` and is installed from source. It is not an npm release yet.
 
+The optional Agent bridge follows the public DSH 0.2 `uiSession.adapter.current` binding. Selecting, switching, or clearing the main Session updates its capability lease; the Surface stays usable if the binding service is unavailable.
+
 ## What It Provides
 
 - One typed `defineReactSurface(...)` entry for Vite React applications and Next.js Client Components.

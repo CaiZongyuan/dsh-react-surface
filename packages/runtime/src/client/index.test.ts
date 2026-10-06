@@ -3,7 +3,7 @@ import { Context } from "@deepseek-ai/cordis";
 
 import { apply, inject } from "./index.tsx";
 
-test("keeps the Surface host available across Session Controller lifetimes", async () => {
+test("keeps the Surface host available across Session binding lifetimes", async () => {
   const ctx = new Context();
   const listeners = new Set<() => void>();
   const slots = new Set<string>();
@@ -29,19 +29,21 @@ test("keeps the Surface host available across Session Controller lifetimes", asy
     });
     registry.open("example.test");
 
-    const provideSessions = () =>
+    const provideBinding = () =>
       ctx.plugin((provider) => {
-        provider.reflect.provide("sessions", {
-          list: {
-            getSnapshot: () => ({ current: undefined }),
-            subscribe(listener: () => void) {
-              listeners.add(listener);
-              return () => listeners.delete(listener);
+        provider.reflect.provide("uiSession", {
+          adapter: {
+            current: {
+              getSnapshot: () => ({ key: undefined }),
+              subscribe(listener: () => void) {
+                listeners.add(listener);
+                return () => listeners.delete(listener);
+              },
             },
           },
         });
       });
-    const first = provideSessions();
+    const first = provideBinding();
     await first.await();
     await Bun.sleep(0);
     expect(listeners.size).toBe(1);
@@ -51,7 +53,7 @@ test("keeps the Surface host available across Session Controller lifetimes", asy
     expect(registry.getSnapshot().activeId).toBe("example.test");
     expect(slots.size).toBe(2);
 
-    const second = provideSessions();
+    const second = provideBinding();
     await second.await();
     await Bun.sleep(0);
     expect(listeners.size).toBe(1);
