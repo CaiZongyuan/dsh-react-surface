@@ -152,7 +152,7 @@ $env:DSH_AG_UI_DIR = "D:\Projects\Frontend\dsh-ag-ui"
 bun run test:e2e
 ```
 
-CLI 必须为 `0.2.0-rc.2`；默认 `dsh` 版本不匹配时，通过 `DSH_CMD` 指定对应可执行文件。测试使用临时 profile，并将基础和 Web bundle 固定到同一版本。
+CLI 必须为 `0.2.0-rc.2`；默认 `dsh` 版本不匹配时，通过 `DSH_CMD` 指定对应可执行文件。测试使用临时 profile，从该 CLI 解析基础和 Web bundle，禁用自动安装 peer，并通过可见控件关闭首次启动向导。
 
 第一条验证未安装 `dsh-ag-ui` 时的安全降级；第二条还会打包并安装显式指定的 AG-UI 源码仓库。
 

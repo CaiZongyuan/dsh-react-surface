@@ -226,7 +226,7 @@ $env:DSH_AG_UI_DIR = "D:\Projects\Frontend\dsh-ag-ui"
 bun run test:e2e
 ```
 
-The browser lane requires a DSH CLI matching `0.2.0-rc.2`; set `DSH_CMD` to its executable path when the default `dsh` is a different version. Its temporary profile pins the base and Web bundles to the same cohort.
+The browser lane requires a DSH CLI matching `0.2.0-rc.2`; set `DSH_CMD` to its executable path when the default `dsh` is a different version. Its temporary profile resolves the base and Web bundles from that CLI, disables automatic peer installation, and dismisses first-run onboarding through its visible controls.
 
 The first command verifies graceful operation without `dsh-ag-ui`; the second also packs and installs the explicitly selected AG-UI source checkout.
 

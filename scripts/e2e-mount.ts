@@ -81,7 +81,7 @@ try {
   const serverStdout = server.stdout as ReadableStream<Uint8Array>;
   const serverStderr = server.stderr as ReadableStream<Uint8Array>;
   const stderrPromise = readStream(serverStderr);
-  const { url, output } = await waitForDshUrl(serverStdout, 120_000).catch(
+  const { url } = await waitForDshUrl(serverStdout, 120_000).catch(
     async (error: unknown) => {
       const stderr = await settleServer(server!, stderrPromise);
       throw new Error(`DSH startup failed:\n${stderr}`, { cause: error });
@@ -225,8 +225,7 @@ try {
     console.log(`Agent-browser inspection URL: ${url}`);
     await new Promise((resolve) => setTimeout(resolve, inspectionMs));
   }
-  console.log(`Real DSH mount passed: ${url}`);
-  console.log(output.trim());
+  console.log("Real DSH mount passed");
   const stderr = await settleServer(server, stderrPromise);
   if (/duplicate prefix route|React surface crashed/i.test(stderr)) {
     throw new Error(`DSH reported a plugin crash:\n${stderr}`);
@@ -243,10 +242,8 @@ async function writeProfile(directory: string): Promise<void> {
       {
         name: "dsh-react-surface-e2e-profile",
         private: true,
-        dependencies: {
-          "@deepseek-ai/dsh-base": dshVersion,
-          "@deepseek-ai/dsh-web-app": dshVersion,
-        },
+        // Built-in bundles resolve from the pinned CLI, not a second Host graph.
+        dependencies: {},
         dsh: {
           profile: {
             bundles: ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"],
@@ -261,7 +258,7 @@ async function writeProfile(directory: string): Promise<void> {
   await writeFile(join(directory, "cordis.patch.yml"), "[]\n", "utf8");
   await writeFile(
     join(directory, "pnpm-workspace.yaml"),
-    `packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: true\n\nallowBuilds:\n  "@deepseek-ai/dsh-subprocess-local": true\n  "@google/genai": false\n  koffi: true\n  node-pty: true\n  protobufjs: true\n\nminimumReleaseAgeExclude:\n  - dsh-react-surface\n  - dsh-react-surface-example-basic\n  - dsh-react-surface-example-ag-ui-tools\n  - dsh-ag-ui\n`,
+    `packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\n\nallowBuilds:\n  "@deepseek-ai/dsh-subprocess-local": true\n  "@google/genai": false\n  koffi: true\n  node-pty: true\n  protobufjs: true\n\nminimumReleaseAgeExclude:\n  - dsh-react-surface\n  - dsh-react-surface-example-basic\n  - dsh-react-surface-example-ag-ui-tools\n  - dsh-ag-ui\n`,
     "utf8",
   );
 }
@@ -270,7 +267,7 @@ async function dismissOnboarding(
   page: import("@playwright/test").Page,
 ): Promise<void> {
   const actionPattern =
-    /^(Continue|Configure later|继续|稍后配置|暂不配置|稍后)$/;
+    /^(Get started|Skip|Got it|Open app|Continue|Configure later|开始设置|跳过|我知道了|进入应用|继续|稍后配置|暂不配置|稍后)$/;
   try {
     await expect
       .poll(() => page.getByRole("button", { name: actionPattern }).count(), {
@@ -287,7 +284,7 @@ async function dismissOnboarding(
       const button = buttons.nth(index);
       try {
         if (!(await button.isVisible())) continue;
-        await button.click({ force: true, timeout: 4_000 });
+        await button.click({ timeout: 4_000 });
         dismissed = true;
         await page.waitForTimeout(250);
       } catch {
