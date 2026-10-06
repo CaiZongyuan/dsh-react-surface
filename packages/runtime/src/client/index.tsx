@@ -43,7 +43,7 @@ export type {
 } from "./contracts.ts";
 import {
   SurfaceAgentClientBridge,
-  type ClientSessionsPort,
+  type ClientSessionBindingPort,
 } from "./surface-agent-client.ts";
 import {
   REACT_SURFACE_FEATURES,
@@ -92,19 +92,19 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => {
     const disposeService = ctx.reflect.provide("reactSurfaces", registry);
     // Bind the optional Agent bridge to the injected service's lifetime. The
-    // Surface host remains usable while the Session Controller is unavailable.
-    const agentScope = ctx.inject(["sessions"], (sessionCtx) => {
-      const sessions = (
-        sessionCtx as unknown as { sessions: ClientSessionsPort }
-      ).sessions;
+    // Surface host remains usable while the Session binding is unavailable.
+    const agentScope = ctx.inject(["uiSession"], (sessionCtx) => {
+      const sessionBinding = (
+        sessionCtx as unknown as { uiSession: ClientSessionBindingPort }
+      ).uiSession;
       sessionCtx.effect(() => {
-        const bridge = new SurfaceAgentClientBridge(sessions, registry);
+        const bridge = new SurfaceAgentClientBridge(sessionBinding, registry);
         return () => {
           bridge.dispose();
           registry.setAgentCapability({
             available: false,
             status: "unavailable",
-            reason: "DSH Session Controller is unavailable",
+            reason: "DSH Session binding is unavailable",
           });
         };
       }, "dsh-react-surface: session agent bridge");
