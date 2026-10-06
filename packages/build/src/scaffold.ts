@@ -134,7 +134,7 @@ function planFiles({
       },
     },
     peerDependencies: {
-      "@deepseek-ai/cordis": "^4.0.2",
+      "@deepseek-ai/cordis": "~4.0.4",
       "dsh-react-surface": "*",
       react: "^18.2.0 || ^19.0.0",
       "react-dom": "^18.2.0 || ^19.0.0",
