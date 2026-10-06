@@ -277,21 +277,48 @@ async function dismissOnboarding(
   } catch {
     return;
   }
-  for (let round = 0; round < 8; round += 1) {
-    let dismissed = false;
-    const buttons = page.getByRole("button", { name: actionPattern });
-    for (let index = (await buttons.count()) - 1; index >= 0; index -= 1) {
-      const button = buttons.nth(index);
-      try {
-        if (!(await button.isVisible())) continue;
-        await button.click({ timeout: 4_000 });
-        dismissed = true;
-        await page.waitForTimeout(250);
-      } catch {
-        // A second onboarding layer can temporarily mask this one.
-      }
-    }
-    if (!dismissed) break;
+  try {
+    await expect
+      .poll(
+        async () => {
+          const buttons = page.getByRole("button", { name: actionPattern });
+          for (
+            let index = (await buttons.count()) - 1;
+            index >= 0;
+            index -= 1
+          ) {
+            const button = buttons.nth(index);
+            if (!(await button.isVisible())) continue;
+            if (!(await button.isEnabled())) return false;
+            try {
+              await button.click({ timeout: 1_000 });
+            } catch {
+              // Wait for the topmost onboarding layer to finish transitioning.
+            }
+            return false;
+          }
+          try {
+            await page
+              .getByRole("button", {
+                name: /^(Collapse sidebar|收起侧边栏)$/,
+              })
+              .click({ trial: true, timeout: 500 });
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        { timeout: 30_000, intervals: [250] },
+      )
+      .toBe(true);
+  } catch (error) {
+    const dialogs = await page
+      .locator('[role="dialog"], [role="presentation"]')
+      .allTextContents();
+    throw new Error(
+      `DSH onboarding did not release the sidebar: ${JSON.stringify(dialogs)}`,
+      { cause: error },
+    );
   }
 }
 
