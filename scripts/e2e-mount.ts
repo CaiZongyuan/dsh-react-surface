@@ -266,60 +266,20 @@ async function writeProfile(directory: string): Promise<void> {
 async function dismissOnboarding(
   page: import("@playwright/test").Page,
 ): Promise<void> {
-  const actionPattern =
-    /^(Get started|Skip|Got it|Open app|Continue|Configure later|开始设置|跳过|我知道了|进入应用|继续|稍后配置|暂不配置|稍后)$/;
-  try {
-    await expect
-      .poll(() => page.getByRole("button", { name: actionPattern }).count(), {
-        timeout: 15_000,
-      })
-      .toBeGreaterThan(0);
-  } catch {
-    return;
-  }
-  try {
-    await expect
-      .poll(
-        async () => {
-          const buttons = page.getByRole("button", { name: actionPattern });
-          for (
-            let index = (await buttons.count()) - 1;
-            index >= 0;
-            index -= 1
-          ) {
-            const button = buttons.nth(index);
-            if (!(await button.isVisible())) continue;
-            if (!(await button.isEnabled())) return false;
-            try {
-              await button.click({ timeout: 1_000 });
-            } catch {
-              // Wait for the topmost onboarding layer to finish transitioning.
-            }
-            return false;
-          }
-          try {
-            await page
-              .getByRole("button", {
-                name: /^(Collapse sidebar|收起侧边栏)$/,
-              })
-              .click({ trial: true, timeout: 500 });
-            return true;
-          } catch {
-            return false;
-          }
-        },
-        { timeout: 30_000, intervals: [250] },
-      )
-      .toBe(true);
-  } catch (error) {
-    const dialogs = await page
-      .locator('[role="dialog"], [role="presentation"]')
-      .allTextContents();
-    throw new Error(
-      `DSH onboarding did not release the sidebar: ${JSON.stringify(dialogs)}`,
-      { cause: error },
-    );
-  }
+  // Each run owns a fresh Profile: complete both ordered first-run steps.
+  await page
+    .getByRole("button", { name: /^(Continue|继续)$/ })
+    .click({ timeout: 30_000 });
+  await page
+    .getByRole("button", { name: /^(Add API Key|添加 API Key)$/ })
+    .click();
+  await page
+    .getByRole("button", { name: /^(Configure later|稍后配置)$/ })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: /^(Collapse sidebar|收起侧边栏)$/ })
+    .click({ trial: true });
 }
 
 async function pack(
