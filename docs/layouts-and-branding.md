@@ -4,13 +4,16 @@
 
 Surface layout is declared in DSH terms, not selectors:
 
-| Preset         | Preserved DSH regions              | Resizable value    |
-| -------------- | ---------------------------------- | ------------------ |
-| `full-frame`   | None                               | None               |
-| `center`       | Sidebar                            | None               |
-| `workspace`    | Sidebar, Conversation, Details     | Conversation width |
-| `right-panel`  | Sidebar, native workspace, Details | Surface width      |
-| `bottom-panel` | Sidebar, native workspace, Details | Surface height     |
+| Preset             | Preserved DSH regions              | Resizable value    |
+| ------------------ | ---------------------------------- | ------------------ |
+| `full-frame`       | None                               | None               |
+| `center`           | Sidebar                            | None               |
+| `workspace`        | Sidebar, Conversation, Details     | Conversation width |
+| `workspace-mirror` | Sidebar, Conversation, Details     | Conversation width |
+| `right-panel`      | Sidebar, native workspace, Details | Surface width      |
+| `bottom-panel`     | Sidebar, native workspace, Details | Surface height     |
+
+`workspace-mirror` is the mirrored geometry of `workspace`: the native conversation renders left of the application panel, separated by the conversation's right border.
 
 ```ts
 layout: {

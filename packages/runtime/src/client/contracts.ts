@@ -3,7 +3,12 @@ import type { ComponentType } from "react";
 import type { ReactSurfaceFeature } from "./runtime-metadata.ts";
 
 export type ReactSurfaceLayout =
-  "full-frame" | "center" | "workspace" | "right-panel" | "bottom-panel";
+  | "full-frame"
+  | "center"
+  | "workspace"
+  | "workspace-mirror"
+  | "right-panel"
+  | "bottom-panel";
 
 export interface ReactSurfaceSizeConstraint {
   /** Preferred panel size in CSS pixels. */
@@ -31,7 +36,7 @@ export interface ReactSurfaceLayoutConfiguration {
   minSurfaceHeight?: number;
   /** Keep the native DSH details column visible and interactive in the full-frame preset. */
   fullFrameKeepDetails?: boolean;
-  /** Native DSH conversation width in the workspace preset. */
+  /** Native DSH conversation width in the workspace presets. */
   conversation?: ReactSurfaceSizeConstraint;
   /** Application panel width in the right-panel preset. */
   rightPanel?: ReactSurfaceSizeConstraint;
@@ -266,6 +271,7 @@ const VALID_LAYOUTS = new Set<ReactSurfaceLayout>([
   "full-frame",
   "center",
   "workspace",
+  "workspace-mirror",
   "right-panel",
   "bottom-panel",
 ]);

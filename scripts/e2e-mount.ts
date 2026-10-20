@@ -175,6 +175,39 @@ try {
       page.locator("[data-dsh-react-surface-brand-name]"),
     ).toHaveText("React Surface");
 
+    await launcher.click();
+    await page
+      .getByRole("combobox", { name: "Layout for Basic Surface" })
+      .selectOption("workspace-mirror");
+    await page
+      .locator("[data-dsh-react-surface-menu-backdrop]")
+      .click({ position: { x: 2, y: 2 } });
+    await expect(layer).toHaveAttribute(
+      "data-surface-layout",
+      "workspace-mirror",
+    );
+    const mirrorPane = page.locator('[data-pane="conversation"]');
+    await expect(mirrorPane).toHaveCSS("justify-self", "start");
+    const paneBox = await mirrorPane.boundingBox();
+    const layerBox = await layer.boundingBox();
+    expect(
+      paneBox &&
+        layerBox &&
+        paneBox.x + paneBox.width <= layerBox.x + 1 &&
+        paneBox.x > 0,
+    ).toBe(true);
+    await separator.focus();
+    const mirrorWidth = Number(await separator.getAttribute("aria-valuenow"));
+    await page.keyboard.press("ArrowRight");
+    await expect(separator).toHaveAttribute(
+      "aria-valuenow",
+      String(mirrorWidth - 16),
+    );
+    await page.screenshot({
+      path: join(resultsDirectory, "workspace-mirror-desktop.png"),
+      fullPage: true,
+    });
+
     await page.keyboard.press("Escape");
     await expect(layer).toHaveAttribute("aria-hidden", "true");
     await launcher.click();

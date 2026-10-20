@@ -33,6 +33,7 @@ const VALID_LAYOUTS = new Set<ReactSurfaceLayout>([
   "full-frame",
   "center",
   "workspace",
+  "workspace-mirror",
   "right-panel",
   "bottom-panel",
 ]);

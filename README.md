@@ -12,7 +12,7 @@ The optional Agent bridge follows the public DSH 0.2 `uiSession.adapter.current`
 
 - One typed `defineReactSurface(...)` entry for Vite React applications and Next.js Client Components.
 - Isolated ShadowRoots with automatic CSS, CSS Module, image, and font bundling.
-- `full-frame`, `center`, `workspace`, `right-panel`, and `bottom-panel` layouts.
+- `full-frame`, `center`, `workspace`, `workspace-mirror`, `right-panel`, and `bottom-panel` layouts.
 - Accessible resize handles, responsive fallback, and versioned UI-only preferences.
 - Surface-only styling or temporary semantic branding of the visible DSH shell.
 - A Sidebar footer action that opens a sole application directly and retains a menu for switching applications and layouts.
