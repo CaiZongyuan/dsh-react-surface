@@ -9,6 +9,7 @@ const configuration: ReactSurfaceLayoutConfiguration = {
     "full-frame",
     "center",
     "workspace",
+    "workspace-mirror",
     "right-panel",
     "bottom-panel",
   ],
@@ -90,6 +91,92 @@ describe("resolveReactSurfaceLayout", () => {
     }
   });
 
+  test("mirrors the workspace split so the conversation renders left of the surface", () => {
+    const result = resolveReactSurfaceLayout({
+      requested: "workspace-mirror",
+      configuration,
+      geometry: desktop,
+      preferredSizes: { conversation: 375 },
+    });
+    expect(result).toMatchObject({
+      resolved: "workspace-mirror",
+      bounds: { left: 655, right: 0 },
+      nativePane: { width: 375, justifySelf: "start", borderRight: true },
+      resize: { key: "conversation", edge: "left", value: 375 },
+    });
+  });
+
+  test("collapses the mirrored conversation without covering navigation", () => {
+    const input = {
+      requested: "workspace-mirror" as const,
+      configuration: { ...configuration, fallback: "shrink" as const },
+      geometry: { ...desktop, detailsWidth: 300 },
+      preferredSizes: { conversation: 375 },
+    };
+    const expanded = resolveReactSurfaceLayout(input);
+    const collapsed = resolveReactSurfaceLayout({
+      ...input,
+      conversationCollapsed: true,
+    });
+    expect(collapsed.resolved).toBe("workspace-mirror");
+    expect(collapsed.bounds).toEqual({
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 280,
+    });
+    expect(collapsed.nativePane).toEqual({
+      ...expanded.nativePane,
+      hidden: true,
+    });
+    expect(collapsed.resize).toBeUndefined();
+  });
+
+  test("keeps an opted-in mirrored workspace beside its conversation when panels cannot fit", () => {
+    for (const width of [360, 768, 1280, 2048]) {
+      const geometry = {
+        width,
+        height: 700,
+        sidebarWidth: 56,
+        detailsWidth: width * 0.3,
+      };
+      const result = resolveReactSurfaceLayout({
+        requested: "workspace-mirror",
+        configuration: {
+          ...configuration,
+          fallback: "shrink",
+          minSurfaceWidth: 360,
+        },
+        geometry,
+        preferredSizes: { conversation: 400 },
+      });
+      expect(result.resolved).toBe("workspace-mirror");
+      expect(result.bounds.right).toBe(geometry.detailsWidth);
+      expect(result.bounds.top).toBe(0);
+      expect(result.bounds.bottom).toBe(0);
+      expect(result.nativePane.borderRight).toBe(true);
+      expect(result.nativePane.width).toBeGreaterThan(0);
+      expect(width - result.bounds.left - result.bounds.right).toBeGreaterThan(
+        0,
+      );
+      expect(result.bounds.left).toBe(
+        geometry.sidebarWidth + result.nativePane.width!,
+      );
+    }
+  });
+
+  test("falls back without mutating native panes when the mirrored split cannot fit", () => {
+    const result = resolveReactSurfaceLayout({
+      requested: "workspace-mirror",
+      configuration,
+      geometry: { width: 900, height: 700, sidebarWidth: 280, detailsWidth: 0 },
+    });
+
+    expect(result.resolved).toBe("full-frame");
+    expect(result.nativePane).toEqual({});
+    expect(result.reason).toContain("minimum widths");
+  });
+
   test("restores the preferred horizontal split after a narrow interval or manual full frame", () => {
     const input = {
       configuration: {
@@ -150,6 +237,18 @@ describe("resolveReactSurfaceLayout", () => {
       bounds: { left: 280, right: 440 },
       nativePane: { width: 440, justifySelf: "end" },
       resize: { key: "conversation", edge: "right" },
+    });
+    expect(
+      resolveReactSurfaceLayout({
+        requested: "workspace-mirror",
+        configuration,
+        geometry: desktop,
+      }),
+    ).toMatchObject({
+      resolved: "workspace-mirror",
+      bounds: { left: 720, right: 0 },
+      nativePane: { width: 440, justifySelf: "start" },
+      resize: { key: "conversation", edge: "left" },
     });
     expect(
       resolveReactSurfaceLayout({

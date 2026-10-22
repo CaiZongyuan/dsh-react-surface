@@ -64,6 +64,7 @@ Cleanup runs newest-first, is idempotent, and continues after one cleanup failur
 - `full-frame` covers and disables the DSH frame.
 - `center` preserves the DSH Sidebar and uses the remaining frame.
 - `workspace` places the application between the Sidebar and native conversation/details panes.
+- `workspace-mirror` mirrors `workspace`: the native conversation renders left of the application.
 - `right-panel` preserves the native DSH workspace and places the application before Details.
 - `bottom-panel` places the application below the native workspace.
 

@@ -16,6 +16,7 @@ const LAYOUT_LABELS: Readonly<Record<ReactSurfaceLayout, string>> = {
   "full-frame": "Full frame",
   center: "Center",
   workspace: "Workspace",
+  "workspace-mirror": "Workspace mirror",
   "right-panel": "Right panel",
   "bottom-panel": "Bottom panel",
 };

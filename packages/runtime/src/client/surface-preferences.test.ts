@@ -64,6 +64,17 @@ describe("ReactSurfacePreferenceStore", () => {
     });
   });
 
+  test("round-trips the workspace-mirror layout through storage sanitization", () => {
+    const storage = new MemoryStorage();
+    const preferences = new ReactSurfacePreferenceStore(storage);
+
+    preferences.setLayout("example.app", "workspace-mirror");
+
+    expect(new ReactSurfacePreferenceStore(storage).get("example.app")).toEqual(
+      { layout: "workspace-mirror", sizes: {} },
+    );
+  });
+
   test("keeps working when storage throws and supports reset", () => {
     const preferences = new ReactSurfacePreferenceStore({
       getItem: () => null,

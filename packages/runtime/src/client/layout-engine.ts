@@ -32,6 +32,7 @@ export interface ReactSurfaceNativePaneLayout {
   justifySelf?: "start" | "end";
   alignSelf?: "start" | "end";
   borderLeft?: boolean;
+  borderRight?: boolean;
   borderTop?: boolean;
 }
 
@@ -94,6 +95,26 @@ export function resolveReactSurfaceLayout({
       return {
         requested,
         resolved: "workspace",
+        bounds: {
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: cleanGeometry.sidebarWidth,
+        },
+        nativePane: { ...expanded.nativePane, hidden: true },
+      };
+    }
+    case "workspace-mirror": {
+      const expanded = workspaceMirror(
+        requested,
+        configuration,
+        cleanGeometry,
+        preferredSizes.conversation,
+      );
+      if (!conversationCollapsed) return expanded;
+      return {
+        requested,
+        resolved: "workspace-mirror",
         bounds: {
           top: 0,
           right: 0,
@@ -246,6 +267,87 @@ function workspace(
           resize: {
             key: "conversation" as const,
             edge: "right" as const,
+            orientation: "vertical" as const,
+            value: conversationWidth,
+            min: constraint.min,
+            max: maximum,
+          },
+        }),
+  };
+}
+
+/** Mirror of `workspace`: the native conversation renders left of the Surface. */
+function workspaceMirror(
+  requested: ReactSurfaceLayout,
+  configuration: ReactSurfaceLayoutConfiguration,
+  geometry: ReactSurfaceShellGeometry,
+  preferred: number | undefined,
+): ReactSurfaceLayoutResolution {
+  const available = Math.max(
+    0,
+    geometry.width - geometry.sidebarWidth - geometry.detailsWidth,
+  );
+  const minSurface = configuration.minSurfaceWidth ?? DEFAULT_MIN_SURFACE_WIDTH;
+  const constraint = normalizeConstraint(configuration.conversation, {
+    initial: Math.round(geometry.width * 0.31),
+    min: 340,
+    max: 440,
+  });
+  const maximum = Math.min(constraint.max, available - minSurface);
+  if (maximum < constraint.min && configuration.fallback === "shrink") {
+    const conversationWidth = Math.min(
+      constraint.max,
+      Math.round((available * constraint.min) / (minSurface + constraint.min)),
+    );
+    return {
+      requested,
+      resolved: "workspace-mirror",
+      bounds: {
+        top: 0,
+        right: geometry.detailsWidth,
+        bottom: 0,
+        left: geometry.sidebarWidth + conversationWidth,
+      },
+      nativePane: {
+        width: conversationWidth,
+        justifySelf: "start",
+        borderRight: true,
+      },
+    };
+  }
+  if (maximum < constraint.min) {
+    return fallback(
+      requested,
+      configuration,
+      geometry,
+      "The mirrored workspace split cannot satisfy both application and conversation minimum widths",
+    );
+  }
+  const conversationWidth = clamp(
+    preferred ?? constraint.initial,
+    constraint.min,
+    maximum,
+  );
+  return {
+    requested,
+    resolved: "workspace-mirror",
+    bounds: {
+      top: 0,
+      right: geometry.detailsWidth,
+      bottom: 0,
+      left: geometry.sidebarWidth + conversationWidth,
+    },
+    nativePane: {
+      width: conversationWidth,
+      justifySelf: "start",
+      borderRight: true,
+    },
+    ...(configuration.resizable === false
+      ? {}
+      : {
+          resize: {
+            key: "conversation" as const,
+            edge: "left" as const,
             orientation: "vertical" as const,
             value: conversationWidth,
             min: constraint.min,

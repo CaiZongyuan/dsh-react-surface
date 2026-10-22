@@ -175,6 +175,55 @@ try {
       page.locator("[data-dsh-react-surface-brand-name]"),
     ).toHaveText("React Surface");
 
+    await launcher.click();
+    await page
+      .getByRole("combobox", { name: "Layout for Basic Surface" })
+      .selectOption("workspace-mirror");
+    await page
+      .locator("[data-dsh-react-surface-menu-backdrop]")
+      .click({ position: { x: 2, y: 2 } });
+    await expect(layer).toHaveAttribute(
+      "data-surface-layout",
+      "workspace-mirror",
+    );
+    // 真实宿主不为会话列渲染 data-pane 属性；按 locateShellElements 的位置
+    // 兜底取 frame 非 overlay 子元素的第 1 个，再核对镜像几何内联样式。
+    const mirrorGeometry = await page.evaluate(() => {
+      const layerEl = document.querySelector("[data-surface-layout]");
+      const overlay = layerEl?.closest("[data-shell-overlay]");
+      const frame = overlay?.parentElement;
+      const conversation = frame
+        ? Array.from(frame.children).filter((element) => element !== overlay)[1]
+        : undefined;
+      const layerRect = layerEl?.getBoundingClientRect();
+      if (
+        !(conversation instanceof HTMLElement) ||
+        !(layerRect instanceof DOMRect)
+      ) {
+        return null;
+      }
+      const rect = conversation.getBoundingClientRect();
+      return {
+        justifySelf: getComputedStyle(conversation).justifySelf,
+        leftOfLayer: rect.x > 0 && rect.x + rect.width <= layerRect.x + 1,
+      };
+    });
+    expect(mirrorGeometry).toEqual({
+      justifySelf: "start",
+      leftOfLayer: true,
+    });
+    await separator.focus();
+    const mirrorWidth = Number(await separator.getAttribute("aria-valuenow"));
+    await page.keyboard.press("ArrowRight");
+    await expect(separator).toHaveAttribute(
+      "aria-valuenow",
+      String(mirrorWidth - 16),
+    );
+    await page.screenshot({
+      path: join(resultsDirectory, "workspace-mirror-desktop.png"),
+      fullPage: true,
+    });
+
     await page.keyboard.press("Escape");
     await expect(layer).toHaveAttribute("aria-hidden", "true");
     await launcher.click();

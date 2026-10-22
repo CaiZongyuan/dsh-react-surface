@@ -417,6 +417,12 @@ class ShellPatch {
         : undefined,
     );
     this.#conversation.setStyle(
+      "border-right",
+      pane.borderRight
+        ? "1px solid var(--dsh-surface-border, var(--dsw-alias-border-l1, rgba(0,0,0,.12)))"
+        : undefined,
+    );
+    this.#conversation.setStyle(
       "border-top",
       pane.borderTop
         ? "1px solid var(--dsh-surface-border, var(--dsw-alias-border-l1, rgba(0,0,0,.12)))"

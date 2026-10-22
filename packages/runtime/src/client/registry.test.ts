@@ -302,6 +302,25 @@ describe("Surface lifecycle and preferences", () => {
     expect(registry.getSnapshot().surfaces[0]?.layout).toBe("workspace");
   });
 
+  test("retains a declared workspace-mirror layout and rejects undeclared ones", () => {
+    const preferences = new ReactSurfacePreferenceStore();
+    const registry = new ReactSurfaceRegistryImpl(preferences);
+    registry.register({
+      ...surface("first"),
+      layout: {
+        default: "workspace",
+        supported: ["workspace", "workspace-mirror"],
+      },
+    });
+
+    registry.setLayout("first", "workspace-mirror");
+    expect(registry.getSnapshot().surfaces[0]?.layout).toBe("workspace-mirror");
+    expect(preferences.get("first").layout).toBe("workspace-mirror");
+    expect(() => registry.setLayout("first", "right-panel")).toThrow(
+      "does not support",
+    );
+  });
+
   test("diagnostics omit locations and Tool payloads", () => {
     const registry = new ReactSurfaceRegistryImpl();
     registry.register(surface("first"));

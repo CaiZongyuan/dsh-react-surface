@@ -12,7 +12,7 @@
 
 - 使用一个类型化的 `defineReactSurface(...)` 接入 Vite React 或 Next.js Client Component。
 - 每个应用使用独立 ShadowRoot，并自动打包 CSS、CSS Modules、图片和字体。
-- 支持 `full-frame`、`center`、`workspace`、`right-panel`、`bottom-panel` 五种布局。
+- 支持 `full-frame`、`center`、`workspace`、`workspace-mirror`、`right-panel`、`bottom-panel` 六种布局。
 - 支持键盘可访问的拖动分隔条、响应式降级和版本化的纯 UI 偏好。
 - 可以只设置 Surface 样式，也可以在 Surface 激活期间协调整个可见 DSH Shell 的品牌 Token。
 - 支持 lazy mount、隐藏后保留状态以及关闭时卸载。
