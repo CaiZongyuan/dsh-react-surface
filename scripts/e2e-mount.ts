@@ -186,16 +186,32 @@ try {
       "data-surface-layout",
       "workspace-mirror",
     );
-    const mirrorPane = page.locator('[data-pane="conversation"]');
-    await expect(mirrorPane).toHaveCSS("justify-self", "start");
-    const paneBox = await mirrorPane.boundingBox();
-    const layerBox = await layer.boundingBox();
-    expect(
-      paneBox &&
-        layerBox &&
-        paneBox.x + paneBox.width <= layerBox.x + 1 &&
-        paneBox.x > 0,
-    ).toBe(true);
+    // 真实宿主不为会话列渲染 data-pane 属性；按 locateShellElements 的位置
+    // 兜底取 frame 非 overlay 子元素的第 1 个，再核对镜像几何内联样式。
+    const mirrorGeometry = await page.evaluate(() => {
+      const layerEl = document.querySelector("[data-surface-layout]");
+      const overlay = layerEl?.closest("[data-shell-overlay]");
+      const frame = overlay?.parentElement;
+      const conversation = frame
+        ? Array.from(frame.children).filter((element) => element !== overlay)[1]
+        : undefined;
+      const layerRect = layerEl?.getBoundingClientRect();
+      if (
+        !(conversation instanceof HTMLElement) ||
+        !(layerRect instanceof DOMRect)
+      ) {
+        return null;
+      }
+      const rect = conversation.getBoundingClientRect();
+      return {
+        justifySelf: getComputedStyle(conversation).justifySelf,
+        leftOfLayer: rect.x > 0 && rect.x + rect.width <= layerRect.x + 1,
+      };
+    });
+    expect(mirrorGeometry).toEqual({
+      justifySelf: "start",
+      leftOfLayer: true,
+    });
     await separator.focus();
     const mirrorWidth = Number(await separator.getAttribute("aria-valuenow"));
     await page.keyboard.press("ArrowRight");
