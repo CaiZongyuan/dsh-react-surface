@@ -93,7 +93,7 @@ DSH pairing authorizes entry to this bridge, not application data. Every applica
 
 ## Compatibility
 
-The current tested cohort is DSH `0.2.1-rc.2` with React `18.3.1`. Client plugins use Cordis for their context type and the DSH UI Renderer for Slot ownership; the removed Client Runtime aggregate is not part of the cohort. Runtime `version`, `interfaceVersion`, and monotonic `features` let Adapters detect capability rather than guess from package versions.
+The current tested cohort is DSH `0.2.2-rc.1` with React `18.3.1`. Client plugins use Cordis for their context type and the DSH UI Renderer for Slot ownership; the removed Client Runtime aggregate is not part of the cohort. Runtime `version`, `interfaceVersion`, and monotonic `features` let Adapters detect capability rather than guess from package versions.
 
 The real-browser consumer installs packed Surface plugins into an isolated Profile. Built-in base and Web bundles resolve from the pinned CLI; the Profile does not install them or automatically install their peers. This preserves one Host module graph so onboarding acknowledgement and settings reload use the same root Include entry.
 

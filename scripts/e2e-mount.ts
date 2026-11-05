@@ -17,6 +17,9 @@ const runtimeManifest = await Bun.file(
 const dshVersion: string =
   runtimeManifest.peerDependencies["@deepseek-ai/dsh-client-ui-layout"];
 let server: ReturnType<typeof Bun.spawn> | undefined;
+let serverStderr: Promise<string> | undefined;
+let serverStdout: Promise<string> | undefined;
+let startupOutput = "";
 
 try {
   const actualVersion = (
@@ -72,21 +75,24 @@ try {
     { cwd: repositoryRoot, env: environment },
   );
 
-  server = Bun.spawn([dshCommand, "web", "--port", "0"], {
+  server = Bun.spawn([dshCommand, "web", "--port", "0", "--no-open"], {
     cwd: repositoryRoot,
     env: environment,
     stdout: "pipe",
     stderr: "pipe",
   });
-  const serverStdout = server.stdout as ReadableStream<Uint8Array>;
-  const serverStderr = server.stderr as ReadableStream<Uint8Array>;
-  const stderrPromise = readStream(serverStderr);
-  const { url } = await waitForDshUrl(serverStdout, 120_000).catch(
+  const stdout = server.stdout as ReadableStream<Uint8Array>;
+  serverStderr = readStream(server.stderr as ReadableStream<Uint8Array>);
+  const { url, output } = await waitForDshUrl(stdout, 120_000).catch(
     async (error: unknown) => {
-      const stderr = await settleServer(server!, stderrPromise);
-      throw new Error(`DSH startup failed:\n${stderr}`, { cause: error });
+      const stderr = await settleServer(server!, serverStderr!);
+      throw new Error(`DSH startup failed:\n${redactDshOutput(stderr)}`, {
+        cause: error,
+      });
     },
   );
+  startupOutput = output;
+  serverStdout = readStream(stdout);
 
   const browser = await chromium.launch({ headless: true });
   try {
@@ -95,6 +101,22 @@ try {
     });
     const pageErrors: string[] = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
+    const bridgeResponses: string[] = [];
+    page.on("response", async (response) => {
+      const pathname = new URL(response.url()).pathname;
+      if (
+        !pathname.startsWith("/react-surface-agent/") ||
+        (response.ok() && !pathname.endsWith("/capabilities"))
+      )
+        return;
+      try {
+        bridgeResponses.push(
+          `${response.status()} ${pathname}: ${(await response.text()).slice(0, 1000)}`,
+        );
+      } catch {
+        // The browser can close while an error response body is being read.
+      }
+    });
 
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
     await dismissOnboarding(page);
@@ -228,9 +250,16 @@ try {
     await expect(layer).toHaveAttribute("aria-hidden", "true");
     await launcher.click();
     await page.getByRole("menuitem", { name: /Agent Tools/ }).click();
-    await expect(page.locator(".tool-status")).toHaveText(
-      agUiTarball ? "idle" : "unavailable",
-    );
+    try {
+      await expect(page.locator(".tool-status")).toHaveText(
+        agUiTarball ? "active" : "unavailable",
+      );
+    } catch (error) {
+      throw new Error(
+        `Surface bridge responses:\n${bridgeResponses.join("\n")}\nPage errors:\n${pageErrors.join("\n")}`,
+        { cause: error },
+      );
+    }
     if (agUiTarball) {
       const capabilityResponse = await page.request.post(
         `${new URL(url).origin}/react-surface-agent/capabilities`,
@@ -275,10 +304,24 @@ try {
     await new Promise((resolve) => setTimeout(resolve, inspectionMs));
   }
   console.log("Real DSH mount passed");
-  const stderr = await settleServer(server, stderrPromise);
+  const stderr = await settleServer(server, serverStderr);
   if (/duplicate prefix route|React surface crashed/i.test(stderr)) {
     throw new Error(`DSH reported a plugin crash:\n${stderr}`);
   }
+} catch (error) {
+  if (!server || !serverStderr) throw error;
+  const stderr = await settleServer(server, serverStderr);
+  const stdout = serverStdout
+    ? await withTimeout(
+        serverStdout,
+        2_000,
+        "Timed out draining DSH stdout",
+      ).catch(() => "")
+    : "";
+  throw new Error(
+    `DSH mount failed. Host output:\n${redactDshOutput(`${startupOutput}\n${stdout}\n${stderr}`).slice(-16_000)}`,
+    { cause: error },
+  );
 } finally {
   if (server) await stopProcess(server);
   await rm(scratchRoot, { recursive: true, force: true });
@@ -395,13 +438,33 @@ async function waitForDshUrl(
     const match = output.match(
       /http:\/\/127\.0\.0\.1:\d+(?:\/?\?token=[A-Za-z0-9_-]+)?/,
     );
-    if (match?.[0]) return { url: match[0], output };
+    if (match?.[0]) {
+      reader.releaseLock();
+      return { url: match[0], output };
+    }
   }
   throw new Error(`DSH web did not report a URL\n${output}`);
 }
 
 async function readStream(stream: ReadableStream<Uint8Array>): Promise<string> {
-  return new Response(stream).text();
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let output = "";
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (result.done) return output + decoder.decode();
+      output += decoder.decode(result.value, { stream: true });
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function redactDshOutput(output: string): string {
+  return output
+    .replace(/([?&]token=)[^\s&]+/g, "$1[redacted]")
+    .replace(/("token"\s*:\s*")[^"]+/g, "$1[redacted]");
 }
 
 async function settleServer(

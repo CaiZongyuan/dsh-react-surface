@@ -30,6 +30,7 @@ Do not make the whole application fail when `available` is false unless Agent op
 
 - Read changing application state just in time instead of copying it into every prompt.
 - Keep Tool names stable and provider-safe.
+- Use the pinned DSH JSON Schema subset (`type`, `oneOf`, `properties`, `required`, `additionalProperties`, `items`, `enum`, `const`, and annotations). Describe numeric bounds and enforce them in the handler; `minimum` and `maximum` are not supported.
 - Validate Tool input again inside the application or backend.
 - Treat browser state as context, not authorization.
 - Derive the native DSH Session on the Host; never accept a model-supplied Session id as authority.

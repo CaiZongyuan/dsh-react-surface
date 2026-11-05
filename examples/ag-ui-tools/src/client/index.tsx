@@ -4,6 +4,7 @@ import {
   defineReactSurface,
   type ReactSurfaceProps,
 } from "dsh-react-surface/client";
+import { counterSetParameters, readCounterValue } from "./counter-tools.ts";
 
 const styles = `
 :host {
@@ -110,14 +111,7 @@ function AgentToolsSurface({ agent, capabilities, close }: ReactSurfaceProps) {
           {
             name: "surface_counter_set",
             description: "Set the counter value in the active Surface.",
-            parameters: {
-              type: "object",
-              properties: {
-                value: { type: "integer", minimum: -999, maximum: 999 },
-              },
-              required: ["value"],
-              additionalProperties: false,
-            },
+            parameters: counterSetParameters,
             execute: (input) => {
               const value = readCounterValue(input);
               setCount(value);
@@ -175,23 +169,6 @@ function AgentToolsSurface({ agent, capabilities, close }: ReactSurfaceProps) {
       </main>
     </div>
   );
-}
-
-function readCounterValue(input: unknown): number {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new TypeError("Counter input must be an object");
-  }
-  const value = (input as Record<string, unknown>).value;
-  if (
-    !Number.isInteger(value) ||
-    (value as number) < -999 ||
-    (value as number) > 999
-  ) {
-    throw new TypeError(
-      "Counter value must be an integer between -999 and 999",
-    );
-  }
-  return value as number;
 }
 
 const definition = defineReactSurface({
